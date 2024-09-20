@@ -94,7 +94,7 @@ fn check_wc_author(
         Err(_) => return Ok(()), // config set should work even if cwd isn't a jj repo
     };
     if let Some(wc_commit) = maybe_wc_commit(&helper) {
-        let author = wc_commit.author();
+        let author = wc_commit.author_raw();
         let orig_value = match author_change {
             AuthorChange::Name => &author.name,
             AuthorChange::Email => &author.email,

@@ -991,7 +991,7 @@ impl<'index> EvaluationContext<'index> {
             let entry = self.index.entry_by_pos(pos);
             let commit = self.store.get_commit(&entry.commit_id()).unwrap();
             Reverse(Item {
-                timestamp: commit.committer().timestamp.timestamp,
+                timestamp: commit.committer_raw().timestamp.timestamp,
                 pos: entry.position(),
             })
         };
@@ -1085,8 +1085,8 @@ fn build_predicate_fn(
                 let entry = index.entry_by_pos(pos);
                 let commit = store.get_commit(&entry.commit_id()).unwrap();
                 let field_value = match field {
-                    SignatureField::Name => &commit.author().name,
-                    SignatureField::Email => &commit.author().email,
+                    SignatureField::Name => &commit.author_raw().name,
+                    SignatureField::Email => &commit.author_raw().email,
                 };
                 pattern.matches(field_value)
             })
@@ -1098,8 +1098,8 @@ fn build_predicate_fn(
                 let entry = index.entry_by_pos(pos);
                 let commit = store.get_commit(&entry.commit_id()).unwrap();
                 let field_value = match field {
-                    SignatureField::Name => &commit.committer().name,
-                    SignatureField::Email => &commit.committer().email,
+                    SignatureField::Name => &commit.committer_raw().name,
+                    SignatureField::Email => &commit.committer_raw().email,
                 };
                 pattern.matches(field_value)
             })
@@ -1109,7 +1109,7 @@ fn build_predicate_fn(
             box_pure_predicate_fn(move |index, pos| {
                 let entry = index.entry_by_pos(pos);
                 let commit = store.get_commit(&entry.commit_id()).unwrap();
-                let author_date = &commit.author().timestamp;
+                let author_date = &commit.author_raw().timestamp;
                 expression.matches(author_date)
             })
         }
@@ -1118,7 +1118,7 @@ fn build_predicate_fn(
             box_pure_predicate_fn(move |index, pos| {
                 let entry = index.entry_by_pos(pos);
                 let commit = store.get_commit(&entry.commit_id()).unwrap();
-                let committer_date = &commit.committer().timestamp;
+                let committer_date = &commit.committer_raw().timestamp;
                 expression.matches(committer_date)
             })
         }
