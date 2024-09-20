@@ -57,6 +57,7 @@ use crate::revset::ResolvedPredicateExpression;
 use crate::revset::Revset;
 use crate::revset::RevsetEvaluationError;
 use crate::revset::RevsetFilterPredicate;
+use crate::revset::SignatureField;
 use crate::revset::GENERATION_RANGE_FULL;
 use crate::rewrite;
 use crate::store::Store;
@@ -1075,23 +1076,32 @@ fn build_predicate_fn(
                 pattern.matches(commit.description())
             })
         }
-        RevsetFilterPredicate::Author(pattern) => {
+        RevsetFilterPredicate::Author(field, pattern) => {
             let pattern = pattern.clone();
+            let &field = field;
             // TODO: Make these functions that take a needle to search for accept some
             // syntax for specifying whether it's a regex.
             box_pure_predicate_fn(move |index, pos| {
                 let entry = index.entry_by_pos(pos);
                 let commit = store.get_commit(&entry.commit_id()).unwrap();
-                pattern.matches(&commit.author().name) || pattern.matches(&commit.author().email)
+                let field_value = match field {
+                    SignatureField::Name => &commit.author().name,
+                    SignatureField::Email => &commit.author().email,
+                };
+                pattern.matches(field_value)
             })
         }
-        RevsetFilterPredicate::Committer(pattern) => {
+        RevsetFilterPredicate::Committer(field, pattern) => {
             let pattern = pattern.clone();
+            let &field = field;
             box_pure_predicate_fn(move |index, pos| {
                 let entry = index.entry_by_pos(pos);
                 let commit = store.get_commit(&entry.commit_id()).unwrap();
-                pattern.matches(&commit.committer().name)
-                    || pattern.matches(&commit.committer().email)
+                let field_value = match field {
+                    SignatureField::Name => &commit.committer().name,
+                    SignatureField::Email => &commit.committer().email,
+                };
+                pattern.matches(field_value)
             })
         }
         RevsetFilterPredicate::AuthorDate(expression) => {
