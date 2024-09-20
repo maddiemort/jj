@@ -64,6 +64,7 @@ use jj_lib::gitignore::GitIgnoreError;
 use jj_lib::gitignore::GitIgnoreFile;
 use jj_lib::hex_util::to_reverse_hex;
 use jj_lib::id_prefix::IdPrefixContext;
+use jj_lib::mailmap::{read_current_mailmap, Mailmap};
 use jj_lib::matchers::Matcher;
 use jj_lib::merge::MergedTreeValue;
 use jj_lib::merged_tree::MergedTree;
@@ -119,6 +120,7 @@ use jj_lib::workspace::Workspace;
 use jj_lib::workspace::WorkspaceLoadError;
 use jj_lib::workspace::WorkspaceLoader;
 use once_cell::unsync::OnceCell;
+use pollster::FutureExt;
 use tracing::instrument;
 use tracing_chrome::ChromeLayerBuilder;
 use tracing_subscriber::prelude::*;
@@ -808,6 +810,11 @@ impl WorkspaceCommandHelper {
         self.repo().view().get_wc_commit_id(self.workspace_id())
     }
 
+    pub fn current_mailmap(&self) -> Result<Mailmap, CommandError> {
+        // TODO: Consider figuring out a caching strategy for this.
+        Ok(read_current_mailmap(self.repo().as_ref(), self.workspace.workspace_id()).block_on()?)
+    }
+
     pub fn working_copy_shared_with_git(&self) -> bool {
         self.working_copy_shared_with_git
     }
@@ -1103,6 +1110,8 @@ impl WorkspaceCommandHelper {
             now.into(),
             &self.revset_extensions,
             Some(workspace_context),
+            // TODO: Consider handling errors here.
+            Rc::new(self.current_mailmap().unwrap_or_default()),
         )
     }
 

@@ -146,6 +146,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 * `jj describe` can now update the description of multiple commits.
 
+* Support for [`.mailmap`](https://git-scm.com/docs/gitmailmap) files has
+  been added.
+
 ### Fixed bugs
 
 * `jj status` will show different messages in a conflicted tree, depending

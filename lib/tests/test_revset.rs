@@ -14,6 +14,7 @@
 
 use std::iter;
 use std::path::Path;
+use std::rc::Rc;
 
 use assert_matches::assert_matches;
 use chrono::DateTime;
@@ -28,6 +29,8 @@ use jj_lib::git;
 use jj_lib::git_backend::GitBackend;
 use jj_lib::graph::GraphEdge;
 use jj_lib::graph::ReverseGraphIterator;
+use jj_lib::mailmap::read_current_mailmap;
+use jj_lib::mailmap::Mailmap;
 use jj_lib::object_id::ObjectId;
 use jj_lib::op_store::RefTarget;
 use jj_lib::op_store::RemoteRef;
@@ -52,6 +55,7 @@ use jj_lib::revset::RevsetWorkspaceContext;
 use jj_lib::revset::SymbolResolverExtension;
 use jj_lib::settings::GitSettings;
 use jj_lib::workspace::Workspace;
+use pollster::FutureExt;
 use test_case::test_case;
 use testutils::create_random_commit;
 use testutils::create_tree;
@@ -68,8 +72,14 @@ fn resolve_symbol_with_extensions(
 ) -> Result<Vec<CommitId>, RevsetResolutionError> {
     let aliases_map = RevsetAliasesMap::default();
     let now = chrono::Local::now();
-    let context =
-        RevsetParseContext::new(&aliases_map, String::new(), now.into(), extensions, None);
+    let context = RevsetParseContext::new(
+        &aliases_map,
+        String::new(),
+        now.into(),
+        extensions,
+        None,
+        Rc::new(Mailmap::empty()),
+    );
     let expression = parse(symbol, &context).unwrap();
     assert_matches!(*expression, RevsetExpression::CommitRef(_));
     let symbol_resolver = DefaultSymbolResolver::new(repo, extensions.symbol_resolvers());
@@ -209,6 +219,7 @@ fn test_resolve_symbol_commit_id() {
         chrono::Utc::now().fixed_offset().into(),
         &extensions,
         None,
+        Rc::new(Mailmap::empty()),
     );
     assert_matches!(
         optimize(parse("present(04)", &context).unwrap()).resolve_user_expression(repo.as_ref(), &symbol_resolver),
@@ -860,7 +871,11 @@ fn test_resolve_symbol_git_refs() {
     );
 }
 
-fn resolve_commit_ids(repo: &dyn Repo, revset_str: &str) -> Vec<CommitId> {
+fn resolve_commit_ids_with_mailmap(
+    repo: &dyn Repo,
+    mailmap_source: &str,
+    revset_str: &str,
+) -> Vec<CommitId> {
     let settings = testutils::user_settings();
     let aliases_map = RevsetAliasesMap::default();
     let revset_extensions = RevsetExtensions::default();
@@ -870,6 +885,7 @@ fn resolve_commit_ids(repo: &dyn Repo, revset_str: &str) -> Vec<CommitId> {
         chrono::Utc::now().fixed_offset().into(),
         &revset_extensions,
         None,
+        Rc::new(Mailmap::from_bytes(mailmap_source.as_bytes())),
     );
     let expression = optimize(parse(revset_str, &context).unwrap());
     let symbol_resolver = DefaultSymbolResolver::new(repo, revset_extensions.symbol_resolvers());
@@ -877,6 +893,10 @@ fn resolve_commit_ids(repo: &dyn Repo, revset_str: &str) -> Vec<CommitId> {
         .resolve_user_expression(repo, &symbol_resolver)
         .unwrap();
     expression.evaluate(repo).unwrap().iter().collect()
+}
+
+fn resolve_commit_ids(repo: &dyn Repo, revset_str: &str) -> Vec<CommitId> {
+    resolve_commit_ids_with_mailmap(repo, "", revset_str)
 }
 
 fn resolve_commit_ids_in_workspace(
@@ -896,12 +916,16 @@ fn resolve_commit_ids_in_workspace(
     };
     let aliases_map = RevsetAliasesMap::default();
     let extensions = RevsetExtensions::default();
+    let mailmap = read_current_mailmap(repo, workspace_ctx.workspace_id)
+        .block_on()
+        .unwrap();
     let context = RevsetParseContext::new(
         &aliases_map,
         settings.user_email(),
         chrono::Utc::now().fixed_offset().into(),
         &extensions,
         Some(workspace_ctx),
+        Rc::new(mailmap),
     );
     let expression = optimize(parse(revset_str, &context).unwrap());
     let symbol_resolver =
@@ -2507,6 +2531,20 @@ fn test_evaluate_expression_author() {
         ),
         vec![commit3.id().clone(), commit1.id().clone()]
     );
+    // Signatures are treated as their mailmapped forms
+    let mailmap = "nameone <email1>";
+    assert_eq!(
+        resolve_commit_ids_with_mailmap(mut_repo, mailmap, "author(\"nameone\")"),
+        vec![commit1.id().clone()]
+    );
+    assert_eq!(
+        resolve_commit_ids_with_mailmap(mut_repo, mailmap, "author(\"name1\")"),
+        vec![]
+    );
+    assert_eq!(
+        resolve_commit_ids_with_mailmap(mut_repo, mailmap, "author_raw(\"name1\")"),
+        vec![commit1.id().clone()]
+    );
 }
 
 fn parse_timestamp(s: &str) -> Timestamp {
@@ -2714,6 +2752,16 @@ fn test_evaluate_expression_mine() {
             commit1.id().clone()
         ]
     );
+    // Signatures are treated as their mailmapped forms
+    let user_email = settings.user_email();
+    assert_eq!(
+        resolve_commit_ids_with_mailmap(
+            mut_repo,
+            format!("<{user_email}> <email1>\n<nobody> name2 <{user_email}>").as_ref(),
+            "mine()"
+        ),
+        vec![commit3.id().clone(), commit1.id().clone()]
+    );
 }
 
 #[test]
@@ -2787,6 +2835,20 @@ fn test_evaluate_expression_committer() {
     assert_eq!(
         resolve_commit_ids(mut_repo, "visible_heads() & committer(\"name2\")"),
         vec![]
+    );
+    // Signatures are treated as their mailmapped forms
+    let mailmap = "nameone <email1>";
+    assert_eq!(
+        resolve_commit_ids_with_mailmap(mut_repo, mailmap, "committer(\"nameone\")"),
+        vec![commit1.id().clone()]
+    );
+    assert_eq!(
+        resolve_commit_ids_with_mailmap(mut_repo, mailmap, "committer(\"name1\")"),
+        vec![]
+    );
+    assert_eq!(
+        resolve_commit_ids_with_mailmap(mut_repo, mailmap, "committer_raw(\"name1\")"),
+        vec![commit1.id().clone()]
     );
 }
 

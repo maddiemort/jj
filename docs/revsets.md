@@ -259,11 +259,17 @@ revsets (expressions) as arguments.
 * `author(pattern)`: Commits with the author's name or email matching the given
   [string pattern](#string-patterns).
 
+* `author_raw(pattern)`: Like `author(pattern)`, but ignoring any mappings in
+  the [`.mailmap` file](https://git-scm.com/docs/gitmailmap).
+
 * `mine()`: Commits where the author's email matches the email of the current
   user.
 
 * `committer(pattern)`: Commits with the committer's  name or email matching the
 given [string pattern](#string-patterns).
+
+* `committer_raw(pattern)`: Like `committer(pattern)`, but ignoring any
+  mappings in the [`.mailmap` file](https://git-scm.com/docs/gitmailmap).
 
 * `author_date(pattern)`: Commits with author dates matching the specified [date
   pattern](#date-patterns).
