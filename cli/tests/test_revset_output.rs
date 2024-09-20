@@ -325,7 +325,7 @@ fn test_function_name_hint() {
       | ^-----^
       |
       = Function "author_" doesn't exist
-    Hint: Did you mean "author", "author_raw", "author_date", "my_author"?
+    Hint: Did you mean "author", "author_date", "author_raw", "my_author"?
     "###);
 
     insta::assert_snapshot!(evaluate_err("my_branches"), @r###"

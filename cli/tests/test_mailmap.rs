@@ -12,7 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::common::{get_stdout_string, TestEnvironment};
+use crate::common::get_stdout_string;
+use crate::common::TestEnvironment;
 
 #[test]
 fn test_mailmap() {
@@ -41,7 +42,7 @@ fn test_mailmap() {
     let stdout = test_env.jj_cmd_success(&repo_path, &["log", "-T", "author"]);
     insta::assert_snapshot!(stdout, @r###"
     @  Test User <test.user@example.com>
-    ◉
+    ◆
     "###);
 
     // Map an email address without any name change.
@@ -51,8 +52,8 @@ fn test_mailmap() {
     let stdout = test_env.jj_cmd_success(&repo_path, &["log", "-T", "author"]);
     insta::assert_snapshot!(stdout, @r###"
     @  Test Üser <test.user@example.net>
-    ◉  Test User <test.user@example.net>
-    ◉
+    ○  Test User <test.user@example.net>
+    ◆
     "###);
 
     // Map an email address to a new name.
@@ -62,9 +63,9 @@ fn test_mailmap() {
     let stdout = test_env.jj_cmd_success(&repo_path, &["log", "-T", "author"]);
     insta::assert_snapshot!(stdout, @r###"
     @  Fest User <xest.user@example.com>
-    ◉  Test Üser <test.user@example.net>
-    ◉  Test User <test.user@example.net>
-    ◉
+    ○  Test Üser <test.user@example.net>
+    ○  Test User <test.user@example.net>
+    ◆
     "###);
 
     // Map an email address to a new name and email address.
@@ -74,10 +75,10 @@ fn test_mailmap() {
     let stdout = test_env.jj_cmd_success(&repo_path, &["log", "-T", "author"]);
     insta::assert_snapshot!(stdout, @r###"
     @  Best User <best.user@example.com>
-    ◉  Fest User <xest.user@example.com>
-    ◉  Test Üser <test.user@example.net>
-    ◉  Test User <test.user@example.net>
-    ◉
+    ○  Fest User <xest.user@example.com>
+    ○  Test Üser <test.user@example.net>
+    ○  Test User <test.user@example.net>
+    ◆
     "###);
 
     // Map an ambiguous email address using names for disambiguation.
@@ -94,24 +95,24 @@ fn test_mailmap() {
     let stdout = test_env.jj_cmd_success(&repo_path, &["log", "-T", "author"]);
     insta::assert_snapshot!(stdout, @r###"
     @  Zest User <zest.user@example.org>
-    ◉  Jest User <jest.user@example.org>
-    ◉  Best User <best.user@example.com>
-    ◉  Fest User <xest.user@example.com>
-    ◉  Test Üser <test.user@example.net>
-    ◉  Test User <test.user@example.net>
-    ◉
+    ○  Jest User <jest.user@example.org>
+    ○  Best User <best.user@example.com>
+    ○  Fest User <xest.user@example.com>
+    ○  Test Üser <test.user@example.net>
+    ○  Test User <test.user@example.net>
+    ◆
     "###);
 
     // The `.mailmap` file in the current workspace’s @ commit should be used.
     let stdout = test_env.jj_cmd_success(&repo_path, &["log", "-T", "author", "--at-operation=@-"]);
     insta::assert_snapshot!(stdout, @r###"
     @  Vest User <user@test>
-    ◉  Rest User <user@test>
-    ◉  Best User <best.user@example.com>
-    ◉  Fest User <xest.user@example.com>
-    ◉  Test Üser <test.user@example.net>
-    ◉  Test User <test.user@example.net>
-    ◉
+    ○  Rest User <user@test>
+    ○  Best User <best.user@example.com>
+    ○  Fest User <xest.user@example.com>
+    ○  Test Üser <test.user@example.net>
+    ○  Test User <test.user@example.net>
+    ◆
     "###);
 
     // The `author(pattern)` revset function should find mapped committers.
@@ -120,7 +121,7 @@ fn test_mailmap() {
         &["log", "-T", "author", "-r", "author(substring-i:bEsT)"],
     );
     insta::assert_snapshot!(stdout, @r###"
-    ◉  Best User <best.user@example.com>
+    ○  Best User <best.user@example.com>
     │
     ~
     "###);
@@ -141,7 +142,7 @@ fn test_mailmap() {
     );
     insta::assert_snapshot!(stdout, @r###"
     @  Zest User <zest.user@example.org>
-    ◉  Jest User <jest.user@example.org>
+    ○  Jest User <jest.user@example.org>
     │
     ~
     "###);
@@ -153,8 +154,8 @@ fn test_mailmap() {
         &["log", "-T", "author", "-r", "mine()"],
     );
     insta::assert_snapshot!(get_stdout_string(&assert), @r###"
-    ◉  Test Üser <test.user@example.net>
-    ◉  Test User <test.user@example.net>
+    ○  Test Üser <test.user@example.net>
+    ○  Test User <test.user@example.net>
     │
     ~
     "###);
