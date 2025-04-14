@@ -177,6 +177,18 @@ impl dyn RevsetFilterExtension {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Signatory {
+    Author,
+    Committer,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SignatureField {
+    Name,
+    Email,
+}
+
 #[derive(Clone, Debug)]
 pub enum RevsetFilterPredicate {
     /// Commits with number of parents in the range.
@@ -618,6 +630,57 @@ impl<St: ExpressionState> RevsetExpression<St> {
         Arc::new(Self::Difference(self.clone(), other.clone()))
     }
 
+    /// Internal helper for matching on signature fields.
+    fn signature_field(
+        signatory: Signatory,
+        field: SignatureField,
+        expr: StringExpression,
+    ) -> Arc<Self> {
+        let predicate = match (signatory, field) {
+            (Signatory::Author, SignatureField::Name) => RevsetFilterPredicate::AuthorName,
+            (Signatory::Author, SignatureField::Email) => RevsetFilterPredicate::AuthorEmail,
+            (Signatory::Committer, SignatureField::Name) => RevsetFilterPredicate::CommitterName,
+            (Signatory::Committer, SignatureField::Email) => RevsetFilterPredicate::CommitterEmail,
+        };
+        Self::filter(predicate(expr))
+    }
+
+    /// Commits with author name matching the pattern.
+    pub fn author_name(expr: StringExpression) -> Arc<Self> {
+        Self::signature_field(Signatory::Author, SignatureField::Name, expr)
+    }
+
+    /// Commits with author email matching the pattern.
+    pub fn author_email(expr: StringExpression) -> Arc<Self> {
+        Self::signature_field(Signatory::Author, SignatureField::Email, expr)
+    }
+
+    /// Commits with author name or email matching the pattern.
+    pub fn author(expr: StringExpression) -> Arc<Self> {
+        Self::union(
+            &RevsetExpression::author_name(expr.clone()),
+            &RevsetExpression::author_email(expr),
+        )
+    }
+
+    /// Commits with committer name matching the pattern.
+    pub fn committer_name(expr: StringExpression) -> Arc<Self> {
+        Self::signature_field(Signatory::Committer, SignatureField::Name, expr)
+    }
+
+    /// Commits with committer email matching the pattern.
+    pub fn committer_email(expr: StringExpression) -> Arc<Self> {
+        Self::signature_field(Signatory::Committer, SignatureField::Email, expr)
+    }
+
+    /// Commits with committer name or email matching the pattern.
+    pub fn committer(expr: StringExpression) -> Arc<Self> {
+        Self::union(
+            &RevsetExpression::committer_name(expr.clone()),
+            &RevsetExpression::committer_email(expr),
+        )
+    }
+
     /// Commits that are in the first expression in `expressions` that is not
     /// `none()`.
     pub fn coalesce(expressions: &[Arc<Self>]) -> Arc<Self> {
@@ -1006,22 +1069,17 @@ static BUILTIN_FUNCTION_MAP: LazyLock<HashMap<&str, RevsetFunction>> = LazyLock:
     map.insert("author", |diagnostics, function, context| {
         let [arg] = function.expect_exact_arguments()?;
         let expr = expect_string_expression(diagnostics, arg, context)?;
-        let name_predicate = RevsetFilterPredicate::AuthorName(expr.clone());
-        let email_predicate = RevsetFilterPredicate::AuthorEmail(expr);
-        Ok(RevsetExpression::filter(name_predicate)
-            .union(&RevsetExpression::filter(email_predicate)))
+        Ok(RevsetExpression::author(expr))
     });
     map.insert("author_name", |diagnostics, function, context| {
         let [arg] = function.expect_exact_arguments()?;
         let expr = expect_string_expression(diagnostics, arg, context)?;
-        let predicate = RevsetFilterPredicate::AuthorName(expr);
-        Ok(RevsetExpression::filter(predicate))
+        Ok(RevsetExpression::author_name(expr))
     });
     map.insert("author_email", |diagnostics, function, context| {
         let [arg] = function.expect_exact_arguments()?;
         let expr = expect_string_expression(diagnostics, arg, context)?;
-        let predicate = RevsetFilterPredicate::AuthorEmail(expr);
-        Ok(RevsetExpression::filter(predicate))
+        Ok(RevsetExpression::author_email(expr))
     });
     map.insert("author_date", |diagnostics, function, context| {
         let [arg] = function.expect_exact_arguments()?;
@@ -1040,29 +1098,23 @@ static BUILTIN_FUNCTION_MAP: LazyLock<HashMap<&str, RevsetFunction>> = LazyLock:
         // Email address domains are inherently case‐insensitive, and the local‐parts
         // are generally (although not universally) treated as case‐insensitive too, so
         // we use a case‐insensitive match here.
-        let pattern = StringPattern::exact_i(context.user_email);
-        let predicate = RevsetFilterPredicate::AuthorEmail(StringExpression::pattern(pattern));
-        Ok(RevsetExpression::filter(predicate))
+        let pattern = StringExpression::pattern(StringPattern::exact_i(context.user_email));
+        Ok(RevsetExpression::author_email(pattern))
     });
     map.insert("committer", |diagnostics, function, context| {
         let [arg] = function.expect_exact_arguments()?;
         let expr = expect_string_expression(diagnostics, arg, context)?;
-        let name_predicate = RevsetFilterPredicate::CommitterName(expr.clone());
-        let email_predicate = RevsetFilterPredicate::CommitterEmail(expr);
-        Ok(RevsetExpression::filter(name_predicate)
-            .union(&RevsetExpression::filter(email_predicate)))
+        Ok(RevsetExpression::committer(expr))
     });
     map.insert("committer_name", |diagnostics, function, context| {
         let [arg] = function.expect_exact_arguments()?;
         let expr = expect_string_expression(diagnostics, arg, context)?;
-        let predicate = RevsetFilterPredicate::CommitterName(expr);
-        Ok(RevsetExpression::filter(predicate))
+        Ok(RevsetExpression::committer_name(expr))
     });
     map.insert("committer_email", |diagnostics, function, context| {
         let [arg] = function.expect_exact_arguments()?;
         let expr = expect_string_expression(diagnostics, arg, context)?;
-        let predicate = RevsetFilterPredicate::CommitterEmail(expr);
-        Ok(RevsetExpression::filter(predicate))
+        Ok(RevsetExpression::committer_email(expr))
     });
     map.insert("committer_date", |diagnostics, function, context| {
         let [arg] = function.expect_exact_arguments()?;
