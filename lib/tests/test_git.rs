@@ -5264,8 +5264,8 @@ fn test_rewrite_imported_commit() -> TestResult {
             imported_commit.parent_ids().to_vec(),
             imported_commit.tree(),
         )
-        .set_author(imported_commit.author().clone())
-        .set_committer(imported_commit.committer().clone())
+        .set_author(imported_commit.author_raw().clone())
+        .set_committer(imported_commit.committer_raw().clone())
         .set_description(imported_commit.description())
         .write_unwrap();
     let repo = tx.commit("test").block_on()?;
@@ -5274,8 +5274,8 @@ fn test_rewrite_imported_commit() -> TestResult {
     // commit should be adjusted to create new commit.
     assert_ne!(imported_commit.id(), authored_commit.id());
     assert_ne!(
-        imported_commit.committer().timestamp,
-        authored_commit.committer().timestamp,
+        imported_commit.committer_raw().timestamp,
+        authored_commit.committer_raw().timestamp,
     );
 
     // The index should be consistent with the store.

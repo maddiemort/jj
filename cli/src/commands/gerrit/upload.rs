@@ -587,8 +587,8 @@ pub async fn cmd_gerrit_upload(
             // Set the timestamp back to the timestamp of the original commit.
             // Otherwise, `jj gerrit upload @ && jj gerrit upload @` will upload
             // two patchsets with the only difference being the timestamp.
-            .set_committer(original_commit.committer().clone())
-            .set_author(original_commit.author().clone())
+            .set_committer(original_commit.committer_raw().clone())
+            .set_author(original_commit.author_raw().clone())
             .write()
             .await?;
 

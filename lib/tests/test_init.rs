@@ -142,10 +142,10 @@ fn test_init_with_default_config(backend: TestRepoBackend) -> TestResult {
         .get_wc_commit_id(WorkspaceName::DEFAULT)
         .unwrap();
     let wc_commit = repo.store().get_commit(wc_commit_id)?;
-    assert_eq!(wc_commit.author().name, "".to_string());
-    assert_eq!(wc_commit.author().email, "".to_string());
-    assert_eq!(wc_commit.committer().name, "".to_string());
-    assert_eq!(wc_commit.committer().email, "".to_string());
+    assert_eq!(wc_commit.author_raw().name, "".to_string());
+    assert_eq!(wc_commit.author_raw().email, "".to_string());
+    assert_eq!(wc_commit.committer_raw().name, "".to_string());
+    assert_eq!(wc_commit.committer_raw().email, "".to_string());
     Ok(())
 }
 
@@ -168,10 +168,10 @@ fn test_init_checkout(backend: TestRepoBackend) -> TestResult {
     );
     assert!(wc_commit.store_commit().predecessors.is_empty());
     assert_eq!(wc_commit.description(), "");
-    assert_eq!(wc_commit.author().name, settings.user_name());
-    assert_eq!(wc_commit.author().email, settings.user_email());
-    assert_eq!(wc_commit.committer().name, settings.user_name());
-    assert_eq!(wc_commit.committer().email, settings.user_email());
+    assert_eq!(wc_commit.author_raw().name, settings.user_name());
+    assert_eq!(wc_commit.author_raw().email, settings.user_email());
+    assert_eq!(wc_commit.committer_raw().name, settings.user_name());
+    assert_eq!(wc_commit.committer_raw().email, settings.user_email());
     assert_matches!(
         repo.operation().predecessors_for_commit(wc_commit.id()),
         Some([])

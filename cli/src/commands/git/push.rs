@@ -528,10 +528,10 @@ async fn validate_commits_ready_to_push(
         if commit.description().is_empty() && !args.allow_empty_description {
             reasons.push("it has no description");
         }
-        if commit.author().name.is_empty()
-            || commit.author().email.is_empty()
-            || commit.committer().name.is_empty()
-            || commit.committer().email.is_empty()
+        if commit.author_raw().name.is_empty()
+            || commit.author_raw().email.is_empty()
+            || commit.committer_raw().name.is_empty()
+            || commit.committer_raw().email.is_empty()
         {
             reasons.push("it has no author and/or committer set");
         }

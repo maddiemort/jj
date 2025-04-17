@@ -151,7 +151,7 @@ pub async fn cmd_sign(
 
     let num_not_authored_by_me = signed_commits
         .iter()
-        .filter(|commit| commit.author().email != tx.settings().user_email())
+        .filter(|commit| commit.author_raw().email != tx.settings().user_email())
         .count();
     if num_not_authored_by_me > 0 {
         writeln!(
