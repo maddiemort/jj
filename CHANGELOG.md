@@ -37,6 +37,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   locally. Setting it to `"*"` is now the closest replacement for the deprecated
   `git.push-new-bookmarks` option.
 
+* Support for [`.mailmap`](https://git-scm.com/docs/gitmailmap) files has
+  been added.
+
 ### Fixed bugs
 
 * `jj git push` now ensures that tracked remote bookmarks are updated even if

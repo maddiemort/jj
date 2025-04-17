@@ -70,6 +70,8 @@ use jj_lib::gitignore::GitIgnoreError;
 use jj_lib::gitignore::GitIgnoreFile;
 use jj_lib::id_prefix::IdPrefixContext;
 use jj_lib::lock::FileLock;
+use jj_lib::mailmap::Mailmap;
+use jj_lib::mailmap::read_current_mailmap;
 use jj_lib::matchers::Matcher;
 use jj_lib::matchers::NothingMatcher;
 use jj_lib::merge::Diff;
@@ -870,6 +872,8 @@ impl WorkspaceCommandEnvironment {
             use_glob_by_default: self.revsets_use_glob_by_default,
             extensions: self.command.revset_extensions(),
             workspace: Some(workspace_context),
+            // TODO: Consider handling errors here.
+            mailmap: Arc::new(self.current_mailmap().unwrap_or_default()),
         }
     }
 
@@ -1396,6 +1400,14 @@ to the current parents may contain changes from multiple commits.
 
     pub fn get_wc_commit_id(&self) -> Option<&CommitId> {
         self.repo().view().get_wc_commit_id(self.workspace_name())
+    }
+
+    pub fn current_mailmap(&self) -> Result<Mailmap, CommandError> {
+        // TODO: Consider figuring out a caching strategy for this.
+        Ok(
+            read_current_mailmap(self.repo().as_ref(), self.workspace.workspace_name())
+                .block_on()?,
+        )
     }
 
     pub fn working_copy_shared_with_git(&self) -> bool {

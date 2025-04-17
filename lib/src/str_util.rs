@@ -249,6 +249,16 @@ impl StringPattern {
         }
     }
 
+    /// Returns a version of this pattern that matches case‐insensitively.
+    pub fn to_case_insensitive(&self) -> Cow<'_, Self> {
+        match self {
+            StringPattern::Exact(literal) => Cow::Owned(StringPattern::exact_i(literal)),
+            StringPattern::Substring(needle) => Cow::Owned(StringPattern::substring_i(needle)),
+            StringPattern::Glob(pattern) => Cow::Owned(StringPattern::GlobI(pattern.clone())),
+            _ => Cow::Borrowed(self),
+        }
+    }
+
     fn to_match_fn(&self) -> Box<DynMatchFn> {
         // TODO: Unicode case folding is complicated and can be
         // locale‐specific. The `globset` crate and Gitoxide only deal with
@@ -453,6 +463,26 @@ impl StringExpression {
                 let p2 = expr2.to_matcher().into_match_fn();
                 StringMatcher::Fn(Box::new(move |haystack| p1(haystack) && p2(haystack)))
             }
+        }
+    }
+
+    /// Returns a version of this expression containing case-insensitive versions of its patterns.
+    pub fn to_case_insensitive(&self) -> Self {
+        // This is a naïve implementation. This could be reworked to also return a Cow with enough
+        // work.
+        match self {
+            Self::Pattern(other) => {
+                Self::Pattern(Box::new(other.to_case_insensitive().into_owned()))
+            }
+            Self::NotIn(expr) => Self::NotIn(Box::new(expr.to_case_insensitive())),
+            Self::Union(lhs, rhs) => Self::Union(
+                Box::new(lhs.to_case_insensitive()),
+                Box::new(rhs.to_case_insensitive()),
+            ),
+            Self::Intersection(lhs, rhs) => Self::Intersection(
+                Box::new(lhs.to_case_insensitive()),
+                Box::new(rhs.to_case_insensitive()),
+            ),
         }
     }
 }
