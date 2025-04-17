@@ -1077,7 +1077,7 @@ impl EvaluationContext<'_> {
             let entry = self.index.entry_by_pos(pos?);
             let commit = self.store.get_commit(&entry.commit_id())?;
             Ok(Reverse(Item {
-                timestamp: commit.committer().timestamp.timestamp,
+                timestamp: commit.committer_raw().timestamp.timestamp,
                 pos: entry.position(),
             }))
         };
@@ -1175,7 +1175,7 @@ fn build_predicate_fn(
             box_pure_predicate_fn(move |index, pos| {
                 let entry = index.entry_by_pos(pos);
                 let commit = store.get_commit(&entry.commit_id())?;
-                Ok(pattern.matches(&commit.author().name))
+                Ok(pattern.matches(&commit.author_raw().name))
             })
         }
         RevsetFilterPredicate::AuthorEmail(pattern) => {
@@ -1183,7 +1183,7 @@ fn build_predicate_fn(
             box_pure_predicate_fn(move |index, pos| {
                 let entry = index.entry_by_pos(pos);
                 let commit = store.get_commit(&entry.commit_id())?;
-                Ok(pattern.matches(&commit.author().email))
+                Ok(pattern.matches(&commit.author_raw().email))
             })
         }
         RevsetFilterPredicate::AuthorDate(expression) => {
@@ -1191,7 +1191,7 @@ fn build_predicate_fn(
             box_pure_predicate_fn(move |index, pos| {
                 let entry = index.entry_by_pos(pos);
                 let commit = store.get_commit(&entry.commit_id())?;
-                let author_date = &commit.author().timestamp;
+                let author_date = &commit.author_raw().timestamp;
                 Ok(expression.matches(author_date))
             })
         }
@@ -1200,7 +1200,7 @@ fn build_predicate_fn(
             box_pure_predicate_fn(move |index, pos| {
                 let entry = index.entry_by_pos(pos);
                 let commit = store.get_commit(&entry.commit_id())?;
-                Ok(pattern.matches(&commit.committer().name))
+                Ok(pattern.matches(&commit.committer_raw().name))
             })
         }
         RevsetFilterPredicate::CommitterEmail(pattern) => {
@@ -1208,7 +1208,7 @@ fn build_predicate_fn(
             box_pure_predicate_fn(move |index, pos| {
                 let entry = index.entry_by_pos(pos);
                 let commit = store.get_commit(&entry.commit_id())?;
-                Ok(pattern.matches(&commit.committer().email))
+                Ok(pattern.matches(&commit.committer_raw().email))
             })
         }
         RevsetFilterPredicate::CommitterDate(expression) => {
@@ -1216,7 +1216,7 @@ fn build_predicate_fn(
             box_pure_predicate_fn(move |index, pos| {
                 let entry = index.entry_by_pos(pos);
                 let commit = store.get_commit(&entry.commit_id())?;
-                let committer_date = &commit.committer().timestamp;
+                let committer_date = &commit.committer_raw().timestamp;
                 Ok(expression.matches(committer_date))
             })
         }

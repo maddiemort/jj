@@ -118,8 +118,8 @@ fn test_initial(backend: TestRepoBackend) {
     assert_eq!(parents, vec![store.root_commit()]);
     assert!(commit.predecessors().next().is_none());
     assert_eq!(commit.description(), "description");
-    assert_eq!(commit.author(), &author_signature);
-    assert_eq!(commit.committer(), &committer_signature);
+    assert_eq!(commit.author_raw(), &author_signature);
+    assert_eq!(commit.committer_raw(), &committer_signature);
     assert_eq!(
         diff_paths(
             &store.root_commit().tree().unwrap(),
@@ -192,14 +192,14 @@ fn test_rewrite(backend: TestRepoBackend) {
     assert_eq!(parents, vec![store.root_commit()]);
     let predecessors: Vec<_> = rewritten_commit.predecessors().try_collect().unwrap();
     assert_eq!(predecessors, vec![initial_commit.clone()]);
-    assert_eq!(rewritten_commit.author().name, settings.user_name());
-    assert_eq!(rewritten_commit.author().email, settings.user_email());
+    assert_eq!(rewritten_commit.author_raw().name, settings.user_name());
+    assert_eq!(rewritten_commit.author_raw().email, settings.user_email());
     assert_eq!(
-        rewritten_commit.committer().name,
+        rewritten_commit.committer_raw().name,
         rewrite_settings.user_name()
     );
     assert_eq!(
-        rewritten_commit.committer().email,
+        rewritten_commit.committer_raw().email,
         rewrite_settings.user_email()
     );
     assert_eq!(
@@ -236,10 +236,10 @@ fn test_rewrite_update_missing_user(backend: TestRepoBackend) {
         )
         .write()
         .unwrap();
-    assert_eq!(initial_commit.author().name, "");
-    assert_eq!(initial_commit.author().email, "");
-    assert_eq!(initial_commit.committer().name, "");
-    assert_eq!(initial_commit.committer().email, "");
+    assert_eq!(initial_commit.author_raw().name, "");
+    assert_eq!(initial_commit.author_raw().email, "");
+    assert_eq!(initial_commit.committer_raw().name, "");
+    assert_eq!(initial_commit.committer_raw().email, "");
     tx.commit("test").unwrap();
 
     let mut config = StackedConfig::with_defaults();
@@ -263,14 +263,14 @@ fn test_rewrite_update_missing_user(backend: TestRepoBackend) {
         .write()
         .unwrap();
 
-    assert_eq!(rewritten_commit.author().name, "Configured User");
+    assert_eq!(rewritten_commit.author_raw().name, "Configured User");
     assert_eq!(
-        rewritten_commit.author().email,
+        rewritten_commit.author_raw().email,
         "configured.user@example.com"
     );
-    assert_eq!(rewritten_commit.committer().name, "Configured User");
+    assert_eq!(rewritten_commit.committer_raw().name, "Configured User");
     assert_eq!(
-        rewritten_commit.committer().email,
+        rewritten_commit.committer_raw().email,
         "configured.user@example.com"
     );
 }
@@ -299,8 +299,8 @@ fn test_rewrite_resets_author_timestamp(backend: TestRepoBackend) {
 
     let initial_timestamp =
         Timestamp::from_datetime(chrono::DateTime::parse_from_rfc3339(initial_timestamp).unwrap());
-    assert_eq!(initial_commit.author().timestamp, initial_timestamp);
-    assert_eq!(initial_commit.committer().timestamp, initial_timestamp);
+    assert_eq!(initial_commit.author_raw().timestamp, initial_timestamp);
+    assert_eq!(initial_commit.committer_raw().timestamp, initial_timestamp);
 
     // Rewrite discardable commit to no longer be discardable
     let new_timestamp_1 = "2002-03-04T05:06:07+08:00";
@@ -322,9 +322,15 @@ fn test_rewrite_resets_author_timestamp(backend: TestRepoBackend) {
         Timestamp::from_datetime(chrono::DateTime::parse_from_rfc3339(new_timestamp_1).unwrap());
     assert_ne!(new_timestamp_1, initial_timestamp);
 
-    assert_eq!(rewritten_commit_1.author().timestamp, new_timestamp_1);
-    assert_eq!(rewritten_commit_1.committer().timestamp, new_timestamp_1);
-    assert_eq!(rewritten_commit_1.author(), rewritten_commit_1.committer());
+    assert_eq!(rewritten_commit_1.author_raw().timestamp, new_timestamp_1);
+    assert_eq!(
+        rewritten_commit_1.committer_raw().timestamp,
+        new_timestamp_1
+    );
+    assert_eq!(
+        rewritten_commit_1.author_raw(),
+        rewritten_commit_1.committer_raw()
+    );
 
     // Rewrite non-discardable commit
     let new_timestamp_2 = "2003-04-05T06:07:08+09:00";
@@ -346,8 +352,11 @@ fn test_rewrite_resets_author_timestamp(backend: TestRepoBackend) {
         Timestamp::from_datetime(chrono::DateTime::parse_from_rfc3339(new_timestamp_2).unwrap());
     assert_ne!(new_timestamp_2, new_timestamp_1);
 
-    assert_eq!(rewritten_commit_2.author().timestamp, new_timestamp_1);
-    assert_eq!(rewritten_commit_2.committer().timestamp, new_timestamp_2);
+    assert_eq!(rewritten_commit_2.author_raw().timestamp, new_timestamp_1);
+    assert_eq!(
+        rewritten_commit_2.committer_raw().timestamp,
+        new_timestamp_2
+    );
 }
 
 #[test_case(TestRepoBackend::Simple ; "simple backend")]

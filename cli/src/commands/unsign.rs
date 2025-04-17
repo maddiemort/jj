@@ -100,7 +100,7 @@ pub fn cmd_unsign(
 
     let num_not_authored_by_me = unsigned_commits
         .iter()
-        .filter(|commit| commit.author().email != tx.settings().user_email())
+        .filter(|commit| commit.author_raw().email != tx.settings().user_email())
         .count();
     if num_not_authored_by_me > 0 {
         writeln!(

@@ -246,7 +246,7 @@ pub(crate) fn cmd_describe(
             new_description != commit.description()
                 || args.reset_author
                 || args.author.as_ref().is_some_and(|(name, email)| {
-                    name != &commit.author().name || email != &commit.author().email
+                    name != &commit.author_raw().name || email != &commit.author_raw().email
                 })
         })
         .map(|(commit, new_description)| (commit.id(), new_description))
