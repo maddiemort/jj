@@ -295,8 +295,8 @@ pub(crate) fn cmd_describe(
                 || args.reset_author
                 // Ignore author timestamp which could be updated if the old
                 // commit was discardable.
-                || old_commit.author().name != commit_builder.author().name
-                || old_commit.author().email != commit_builder.author().email
+                || old_commit.author_raw().name != commit_builder.author().name
+                || old_commit.author_raw().email != commit_builder.author().email
         })
         .map(|(old_commit, commit_builder)| (old_commit.id(), commit_builder))
         .collect();

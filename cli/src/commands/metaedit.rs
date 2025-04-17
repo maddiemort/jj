@@ -203,7 +203,7 @@ pub(crate) fn cmd_metaedit(
                     || args.legacy_update_committer_timestamp
                     || rewriter.parents_changed();
 
-                let old_author = rewriter.old_commit().author().clone();
+                let old_author = rewriter.old_commit().author_raw().clone();
                 let mut commit_builder = rewriter.reparent();
                 let mut new_author = commit_builder.author().clone();
                 if let Some((name, email)) = args.author.clone() {

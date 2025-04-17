@@ -1073,7 +1073,7 @@ fn builtin_commit_methods<'repo>() -> CommitTemplateBuildMethodFnMap<'repo, Comm
         "author",
         |_language, _diagnostics, _build_ctx, self_property, function| {
             function.expect_no_arguments()?;
-            let out_property = self_property.map(|commit| commit.author().clone());
+            let out_property = self_property.map(|commit| commit.author_raw().clone());
             Ok(out_property.into_dyn_wrapped())
         },
     );
@@ -1081,7 +1081,7 @@ fn builtin_commit_methods<'repo>() -> CommitTemplateBuildMethodFnMap<'repo, Comm
         "committer",
         |_language, _diagnostics, _build_ctx, self_property, function| {
             function.expect_no_arguments()?;
-            let out_property = self_property.map(|commit| commit.committer().clone());
+            let out_property = self_property.map(|commit| commit.committer_raw().clone());
             Ok(out_property.into_dyn_wrapped())
         },
     );
@@ -1090,7 +1090,8 @@ fn builtin_commit_methods<'repo>() -> CommitTemplateBuildMethodFnMap<'repo, Comm
         |language, _diagnostics, _build_ctx, self_property, function| {
             function.expect_no_arguments()?;
             let user_email = language.revset_parse_context.user_email.to_owned();
-            let out_property = self_property.map(move |commit| commit.author().email == user_email);
+            let out_property =
+                self_property.map(move |commit| commit.author_raw().email == user_email);
             Ok(out_property.into_dyn_wrapped())
         },
     );
