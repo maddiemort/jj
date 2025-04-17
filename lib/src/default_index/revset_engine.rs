@@ -1170,7 +1170,7 @@ fn build_predicate_fn(
                 Ok(pattern.matches(commit.description().lines().next().unwrap_or_default()))
             })
         }
-        RevsetFilterPredicate::AuthorName(pattern) => {
+        RevsetFilterPredicate::AuthorNameRaw(pattern) => {
             let pattern = pattern.clone();
             box_pure_predicate_fn(move |index, pos| {
                 let entry = index.entry_by_pos(pos);
@@ -1178,7 +1178,7 @@ fn build_predicate_fn(
                 Ok(pattern.matches(&commit.author_raw().name))
             })
         }
-        RevsetFilterPredicate::AuthorEmail(pattern) => {
+        RevsetFilterPredicate::AuthorEmailRaw(pattern) => {
             let pattern = pattern.clone();
             box_pure_predicate_fn(move |index, pos| {
                 let entry = index.entry_by_pos(pos);
@@ -1195,7 +1195,7 @@ fn build_predicate_fn(
                 Ok(expression.matches(author_date))
             })
         }
-        RevsetFilterPredicate::CommitterName(pattern) => {
+        RevsetFilterPredicate::CommitterNameRaw(pattern) => {
             let pattern = pattern.clone();
             box_pure_predicate_fn(move |index, pos| {
                 let entry = index.entry_by_pos(pos);
@@ -1203,7 +1203,7 @@ fn build_predicate_fn(
                 Ok(pattern.matches(&commit.committer_raw().name))
             })
         }
-        RevsetFilterPredicate::CommitterEmail(pattern) => {
+        RevsetFilterPredicate::CommitterEmailRaw(pattern) => {
             let pattern = pattern.clone();
             box_pure_predicate_fn(move |index, pos| {
                 let entry = index.entry_by_pos(pos);
