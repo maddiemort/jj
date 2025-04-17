@@ -391,7 +391,7 @@ fn test_function_name_hint() {
       | ^-----^
       |
       = Function `author_` doesn't exist
-    Hint: Did you mean `author`, `author_date`, `author_email`, `author_name`, `my_author`?
+    Hint: Did you mean `author`, `author_raw`, `author_date`, `author_email`, `author_name`, `my_author`?
     [EOF]
     [exit status: 1]
     ");

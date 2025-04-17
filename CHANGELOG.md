@@ -14,6 +14,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### New features
 
+* Support for [`.mailmap`](https://git-scm.com/docs/gitmailmap) files has
+  been added.
+
 ### Fixed bugs
 
 ## [0.28.2] - 2025-04-07

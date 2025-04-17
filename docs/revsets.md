@@ -279,11 +279,20 @@ revsets (expressions) as arguments.
   [string pattern](#string-patterns). Equivalent to `author_name(pattern) |
   author_email(pattern)`.
 
+* `author_raw(pattern)`: Like `author(pattern)`, but ignoring any mappings in
+  the [`.mailmap` file](https://git-scm.com/docs/gitmailmap).
+
 * `author_name(pattern)`: Commits with the author's name matching the given
   [string pattern](#string-patterns).
 
+* `author_name_raw(pattern)`: Like `author_name(pattern)`, but ignoring any
+  mappings in the [`.mailmap` file](https://git-scm.com/docs/gitmailmap).
+
 * `author_email(pattern)`: Commits with the author's email matching the given
   [string pattern](#string-patterns).
+
+* `author_email_raw(pattern)`: Like `author_email(pattern)`, but ignoring any
+  mappings in the [`.mailmap` file](https://git-scm.com/docs/gitmailmap).
 
 * `author_date(pattern)`: Commits with author dates matching the specified [date
   pattern](#date-patterns).
@@ -295,11 +304,20 @@ revsets (expressions) as arguments.
   given [string pattern](#string-patterns). Equivalent to
   `committer_name(pattern) | committer_email(pattern)`.
 
+* `committer_raw(pattern)`: Like `committer(pattern)`, but ignoring any mappings
+  in the [`.mailmap` file](https://git-scm.com/docs/gitmailmap).
+
 * `committer_name(pattern)`: Commits with the committer's name matching the
   given [string pattern](#string-patterns).
 
+* `committer_name_raw(pattern)`: Like `committer_name(pattern)`, but ignoring
+  any mappings in the [`.mailmap` file](https://git-scm.com/docs/gitmailmap).
+
 * `committer_email(pattern)`: Commits with the committer's email matching the
   given [string pattern](#string-patterns).
+
+* `committer_email_raw(pattern)`: Like `committer_email(pattern)`, but ignoring
+  any mappings in the [`.mailmap` file](https://git-scm.com/docs/gitmailmap).
 
 * `committer_date(pattern)`: Commits with committer dates matching the specified
   [date pattern](#date-patterns).

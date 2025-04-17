@@ -826,6 +826,15 @@ fn builtin_commit_methods<'repo>() -> CommitTemplateBuildMethodFnMap<'repo, Comm
     );
     map.insert(
         "author",
+        |language, _diagnostics, _build_ctx, self_property, function| {
+            function.expect_no_arguments()?;
+            let mailmap = language.revset_parse_context.mailmap.clone();
+            let out_property = self_property.map(move |commit| mailmap.author(&commit));
+            Ok(L::wrap_signature(out_property))
+        },
+    );
+    map.insert(
+        "author_raw",
         |_language, _diagnostics, _build_ctx, self_property, function| {
             function.expect_no_arguments()?;
             let out_property = self_property.map(|commit| commit.author_raw().clone());
@@ -834,6 +843,15 @@ fn builtin_commit_methods<'repo>() -> CommitTemplateBuildMethodFnMap<'repo, Comm
     );
     map.insert(
         "committer",
+        |language, _diagnostics, _build_ctx, self_property, function| {
+            function.expect_no_arguments()?;
+            let mailmap = language.revset_parse_context.mailmap.clone();
+            let out_property = self_property.map(move |commit| mailmap.committer(&commit));
+            Ok(L::wrap_signature(out_property))
+        },
+    );
+    map.insert(
+        "committer_raw",
         |_language, _diagnostics, _build_ctx, self_property, function| {
             function.expect_no_arguments()?;
             let out_property = self_property.map(|commit| commit.committer_raw().clone());
@@ -844,9 +862,10 @@ fn builtin_commit_methods<'repo>() -> CommitTemplateBuildMethodFnMap<'repo, Comm
         "mine",
         |language, _diagnostics, _build_ctx, self_property, function| {
             function.expect_no_arguments()?;
+            let mailmap = language.revset_parse_context.mailmap.clone();
             let user_email = language.revset_parse_context.user_email.to_owned();
             let out_property =
-                self_property.map(move |commit| commit.author_raw().email == user_email);
+                self_property.map(move |commit| mailmap.author(&commit).email == user_email);
             Ok(L::wrap_boolean(out_property))
         },
     );

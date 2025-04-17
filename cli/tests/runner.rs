@@ -52,6 +52,7 @@ mod test_help_command;
 mod test_immutable_commits;
 mod test_interdiff_command;
 mod test_log_command;
+mod test_mailmap;
 mod test_new_command;
 mod test_next_prev_commands;
 mod test_operations;
