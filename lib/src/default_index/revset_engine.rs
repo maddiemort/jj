@@ -1255,7 +1255,7 @@ fn build_predicate_fn(
                 Ok(matcher.is_match(commit.description().lines().next().unwrap_or_default()))
             })
         }
-        RevsetFilterPredicate::AuthorName(expression) => {
+        RevsetFilterPredicate::AuthorNameRaw(expression) => {
             let matcher = Rc::new(expression.to_matcher());
             box_pure_predicate_fn(move |index, pos| {
                 let entry = index.commits().entry_by_pos(pos);
@@ -1263,7 +1263,7 @@ fn build_predicate_fn(
                 Ok(matcher.is_match(&commit.author_raw().name))
             })
         }
-        RevsetFilterPredicate::AuthorEmail(expression) => {
+        RevsetFilterPredicate::AuthorEmailRaw(expression) => {
             let matcher = Rc::new(expression.to_matcher());
             box_pure_predicate_fn(move |index, pos| {
                 let entry = index.commits().entry_by_pos(pos);
@@ -1280,7 +1280,7 @@ fn build_predicate_fn(
                 Ok(expression.matches(author_date))
             })
         }
-        RevsetFilterPredicate::CommitterName(expression) => {
+        RevsetFilterPredicate::CommitterNameRaw(expression) => {
             let matcher = Rc::new(expression.to_matcher());
             box_pure_predicate_fn(move |index, pos| {
                 let entry = index.commits().entry_by_pos(pos);
@@ -1288,7 +1288,7 @@ fn build_predicate_fn(
                 Ok(matcher.is_match(&commit.committer_raw().name))
             })
         }
-        RevsetFilterPredicate::CommitterEmail(expression) => {
+        RevsetFilterPredicate::CommitterEmailRaw(expression) => {
             let matcher = Rc::new(expression.to_matcher());
             box_pure_predicate_fn(move |index, pos| {
                 let entry = index.commits().entry_by_pos(pos);
