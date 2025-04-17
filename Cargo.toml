@@ -59,6 +59,10 @@ gix = { version = "0.81.0", default-features = false, features = [
     "sha1",
     "zlib-rs",
 ] }
+# We list `gix-{actor,mailmap}` separately, as they are used by
+# `jj_lib::mailmap` even when the Git backend is disabled.
+gix-actor = { version = "0.35.6" }
+gix-mailmap = { version = "0.27.4" }
 globset = "0.4.18"
 hashbrown = { version = "0.16.1", default-features = false, features = ["inline-more"] }
 ignore = "0.4.25"

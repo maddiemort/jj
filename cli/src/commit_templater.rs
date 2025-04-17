@@ -1097,6 +1097,15 @@ fn builtin_commit_methods<'repo>() -> CommitTemplateBuildMethodFnMap<'repo, Comm
     );
     map.insert(
         "author",
+        |language, _diagnostics, _build_ctx, self_property, function| {
+            function.expect_no_arguments()?;
+            let mailmap = language.revset_parse_context.mailmap.clone();
+            let out_property = self_property.map(move |commit| mailmap.author(&commit));
+            Ok(out_property.into_dyn_wrapped())
+        },
+    );
+    map.insert(
+        "author_raw",
         |_language, _diagnostics, _build_ctx, self_property, function| {
             function.expect_no_arguments()?;
             let out_property = self_property.map(|commit| commit.author_raw().clone());
@@ -1105,6 +1114,15 @@ fn builtin_commit_methods<'repo>() -> CommitTemplateBuildMethodFnMap<'repo, Comm
     );
     map.insert(
         "committer",
+        |language, _diagnostics, _build_ctx, self_property, function| {
+            function.expect_no_arguments()?;
+            let mailmap = language.revset_parse_context.mailmap.clone();
+            let out_property = self_property.map(move |commit| mailmap.committer(&commit));
+            Ok(out_property.into_dyn_wrapped())
+        },
+    );
+    map.insert(
+        "committer_raw",
         |_language, _diagnostics, _build_ctx, self_property, function| {
             function.expect_no_arguments()?;
             let out_property = self_property.map(|commit| commit.committer_raw().clone());
@@ -1115,9 +1133,10 @@ fn builtin_commit_methods<'repo>() -> CommitTemplateBuildMethodFnMap<'repo, Comm
         "mine",
         |language, _diagnostics, _build_ctx, self_property, function| {
             function.expect_no_arguments()?;
+            let mailmap = language.revset_parse_context.mailmap.clone();
             let user_email = language.revset_parse_context.user_email.to_owned();
             let out_property =
-                self_property.map(move |commit| commit.author_raw().email == user_email);
+                self_property.map(move |commit| mailmap.author(&commit).email == user_email);
             Ok(out_property.into_dyn_wrapped())
         },
     );
@@ -3047,13 +3066,13 @@ mod tests {
     use std::path::Path;
     use std::path::PathBuf;
 
-    use jj_lib::config::ConfigLayer;
     use jj_lib::config::ConfigSource;
     use jj_lib::fileset::FilesetAliasesMap;
     use jj_lib::revset::RevsetAliasesMap;
     use jj_lib::revset::RevsetExpression;
     use jj_lib::revset::RevsetExtensions;
     use jj_lib::revset::RevsetWorkspaceContext;
+    use jj_lib::{config::ConfigLayer, mailmap::Mailmap};
     use testutils::TestRepoBackend;
     use testutils::TestWorkspace;
     use testutils::repo_path_buf;
@@ -3133,6 +3152,7 @@ mod tests {
                     path_converter: &self.path_converter,
                     workspace_name: self.test_workspace.workspace.workspace_name(),
                 }),
+                mailmap: Arc::new(Mailmap::empty()),
             };
             let mut language = CommitTemplateLanguage::new(
                 self.test_workspace.repo.as_ref(),

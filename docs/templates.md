@@ -185,7 +185,11 @@ This type cannot be printed. The following methods are defined.
 * `.commit_id() -> CommitId`
 * `.parents() -> List<Commit>`
 * `.author() -> Signature`
+* `.author_raw() -> Signature`: Like `author()`, but ignoring any mappings in
+  the [`.mailmap` file](https://git-scm.com/docs/gitmailmap).
 * `.committer() -> Signature`
+* `.committer_raw() -> Signature`: Like `committer()`, but ignoring any mappings
+  in the [`.mailmap` file](https://git-scm.com/docs/gitmailmap).
 * `.signature() -> Option<CryptographicSignature>`: Cryptographic signature if
   the commit was signed.
 * `.mine() -> Boolean`: Commits where the author's email matches the email of
