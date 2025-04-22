@@ -92,7 +92,7 @@ pub(crate) fn cmd_abandon(
         return Ok(());
     }
     let to_abandon_set: HashSet<&CommitId> = to_abandon.iter().ids().collect();
-    workspace_command.check_rewritable(to_abandon_set.iter().copied())?;
+    workspace_command.check_rewritable(ui, to_abandon_set.iter().copied())?;
 
     let mut tx = workspace_command.start_transaction();
     let options = RewriteRefsOptions {
@@ -128,7 +128,7 @@ pub(crate) fn cmd_abandon(
         writeln!(formatter, "Abandoned {} commits:", to_abandon.len())?;
         print_updated_commits(
             formatter.as_mut(),
-            &tx.base_workspace_helper().commit_summary_template(),
+            &tx.base_workspace_helper().commit_summary_template(ui)?,
             &to_abandon,
         )?;
         if !deleted_bookmarks.is_empty() {

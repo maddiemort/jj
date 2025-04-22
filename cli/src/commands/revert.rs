@@ -197,7 +197,7 @@ pub(crate) fn cmd_revert(
         )?;
         print_updated_commits(
             formatter.as_mut(),
-            &tx.commit_summary_template(),
+            &tx.commit_summary_template(ui)?,
             &reverted_commits,
         )?;
         if num_rebased > 0 {

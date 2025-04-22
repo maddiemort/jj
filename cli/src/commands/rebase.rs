@@ -425,7 +425,7 @@ fn rebase_revisions(
         .parse_union_revsets(ui, revisions)?
         .evaluate_to_commits()?
         .try_collect()?; // in reverse topological order
-    workspace_command.check_rewritable(target_commits.iter().ids())?;
+    workspace_command.check_rewritable(ui, target_commits.iter().ids())?;
 
     let (new_parent_ids, new_child_ids) = compute_commit_location(
         ui,
@@ -467,7 +467,7 @@ fn rebase_source(
         .iter()
         .map(|id| workspace_command.repo().store().get_commit(id))
         .try_collect()?;
-    workspace_command.check_rewritable(source_commits.iter().ids())?;
+    workspace_command.check_rewritable(ui, source_commits.iter().ids())?;
 
     let (new_parent_ids, new_child_ids) = compute_commit_location(
         ui,
@@ -529,7 +529,7 @@ fn rebase_branch(
         .iter()
         .commits(workspace_command.repo().store())
         .try_collect()?;
-    workspace_command.check_rewritable(root_commits.iter().ids())?;
+    workspace_command.check_rewritable(ui, root_commits.iter().ids())?;
     if rebase_destination.destination.is_some() && new_child_ids.is_empty() {
         for commit in &root_commits {
             check_rebase_destinations(workspace_command.repo(), &new_parent_ids, commit)?;

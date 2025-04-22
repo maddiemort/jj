@@ -101,7 +101,7 @@ pub fn cmd_bookmark_create(
             "Created {} bookmarks pointing to ",
             bookmark_names.len()
         )?;
-        tx.write_commit_summary(formatter.as_mut(), &target_commit)?;
+        tx.write_commit_summary(ui, formatter.as_mut(), &target_commit)??;
         writeln!(formatter)?;
     }
     tx.finish(

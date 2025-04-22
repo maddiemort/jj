@@ -76,7 +76,7 @@ fn cmd_tag_list(
     let view = repo.view();
 
     let template = {
-        let language = workspace_command.commit_template_language();
+        let language = workspace_command.commit_template_language(ui)?;
         let text = match &args.template {
             Some(value) => value.to_owned(),
             None => workspace_command.settings().get("templates.tag_list")?,

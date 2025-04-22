@@ -106,7 +106,7 @@ pub(crate) fn cmd_diffedit(
             .resolve_single_rev(ui, args.from.as_ref().unwrap_or(&RevisionArg::AT))?];
         diff_description = format!(
             "The diff initially shows the commit's changes relative to:\n{}",
-            workspace_command.format_commit_summary(&base_commits[0])
+            workspace_command.format_commit_summary(ui, &base_commits[0])?
         );
     } else {
         target_commit = workspace_command
@@ -114,10 +114,11 @@ pub(crate) fn cmd_diffedit(
         base_commits = target_commit.parents().try_collect()?;
         diff_description = "The diff initially shows the commit's changes.".to_string();
     };
-    workspace_command.check_rewritable([target_commit.id()])?;
+    workspace_command.check_rewritable(ui, [target_commit.id()])?;
 
     let diff_editor = workspace_command.diff_editor(ui, args.tool.as_deref())?;
     let mut tx = workspace_command.start_transaction();
+    let commit_summary = tx.format_commit_summary(ui, &target_commit)?;
     let format_instructions = || {
         format!(
             "\
@@ -127,7 +128,7 @@ You are editing changes in: {}
 
 Adjust the right side until it shows the contents you want. If you
 don't make any changes, then the operation will be aborted.",
-            tx.format_commit_summary(&target_commit),
+            commit_summary
         )
     };
     let base_tree = merge_commit_trees(tx.repo(), base_commits.as_slice())?;
@@ -153,7 +154,7 @@ don't make any changes, then the operation will be aborted.",
         };
         if let Some(mut formatter) = ui.status_formatter() {
             write!(formatter, "Created ")?;
-            tx.write_commit_summary(formatter.as_mut(), &new_commit)?;
+            tx.write_commit_summary(ui, formatter.as_mut(), &new_commit)??;
             writeln!(formatter)?;
             if num_rebased > 0 {
                 writeln!(

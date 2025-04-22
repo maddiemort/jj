@@ -52,7 +52,7 @@ fn run_custom_command(
             writeln!(
                 ui.status(),
                 "Frobnicated revision: {}",
-                workspace_command.format_commit_summary(&new_commit)
+                workspace_command.format_commit_summary(ui, &new_commit)?
             )?;
             Ok(())
         }

@@ -55,7 +55,7 @@ pub fn cmd_unsign(
         .evaluate_to_commits()?
         .try_collect()?;
 
-    workspace_command.check_rewritable(commits.iter().ids())?;
+    workspace_command.check_rewritable(ui, commits.iter().ids())?;
 
     let to_unsign: IndexSet<Commit> = commits
         .into_iter()
@@ -92,7 +92,7 @@ pub fn cmd_unsign(
             writeln!(formatter, "Unsigned {} commits:", unsigned_commits.len())?;
             print_updated_commits(
                 formatter.as_mut(),
-                &tx.commit_summary_template(),
+                &tx.commit_summary_template(ui)?,
                 &unsigned_commits,
             )?;
         }

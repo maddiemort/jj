@@ -169,7 +169,7 @@ pub fn cmd_bookmark_list(
     };
 
     let template = {
-        let language = workspace_command.commit_template_language();
+        let language = workspace_command.commit_template_language(ui)?;
         let text = match &args.template {
             Some(value) => value.to_owned(),
             None => workspace_command

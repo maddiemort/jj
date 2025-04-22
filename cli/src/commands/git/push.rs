@@ -523,7 +523,11 @@ fn validate_commits_ready_to_push(
         .cloned()
         .collect_vec();
     let commits_to_push = RevsetExpression::commits(old_heads)
-        .union(workspace_helper.env().immutable_heads_expression())
+        .union(
+            &workspace_helper
+                .env()
+                .immutable_heads_expression(ui, repo.as_ref())?,
+        )
         .range(&RevsetExpression::commits(new_heads));
 
     let settings = workspace_helper.settings();
@@ -541,7 +545,7 @@ fn validate_commits_ready_to_push(
     let mut commits_to_sign = vec![];
 
     for commit in workspace_helper
-        .attach_revset_evaluator(commits_to_push)
+        .attach_revset_evaluator(ui, commits_to_push)?
         .evaluate_to_commits()?
     {
         let commit = commit?;
@@ -573,9 +577,10 @@ fn validate_commits_ready_to_push(
                 short_commit_hash(commit.id()),
                 reasons.join(" and ")
             ));
+            let commit_summary_template = workspace_helper.commit_summary_template(ui)?;
             error.add_formatted_hint_with(|formatter| {
                 write!(formatter, "Rejected commit: ")?;
-                workspace_helper.write_commit_summary(formatter, &commit)?;
+                commit_summary_template.format(&commit, formatter)?;
                 Ok(())
             });
             if !args.allow_private && is_private {
@@ -956,7 +961,7 @@ fn find_bookmarks_targeted_by_revisions<'a>(
         .range(&RevsetExpression::working_copy(workspace_name.to_owned()))
         .intersection(&RevsetExpression::bookmarks(StringPattern::everything()));
         let mut commit_ids = workspace_command
-            .attach_revset_evaluator(expression)
+            .attach_revset_evaluator(ui, expression)?
             .evaluate_to_commit_ids()?
             .peekable();
         if commit_ids.peek().is_none() {

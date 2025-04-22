@@ -137,7 +137,7 @@ pub(crate) fn cmd_fix(
     }
     .evaluate_to_commit_ids()?
     .try_collect()?;
-    workspace_command.check_rewritable(root_commits.iter())?;
+    workspace_command.check_rewritable(ui, root_commits.iter())?;
     let matcher = workspace_command
         .parse_file_patterns(ui, &args.paths)?
         .to_matcher();

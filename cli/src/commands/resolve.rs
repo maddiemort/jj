@@ -109,7 +109,7 @@ pub(crate) fn cmd_resolve(
         .iter()
         .map(|(path, _)| path.as_ref())
         .collect_vec();
-    workspace_command.check_rewritable([commit.id()])?;
+    workspace_command.check_rewritable(ui, [commit.id()])?;
     let merge_editor = workspace_command.merge_editor(ui, args.tool.as_deref())?;
     let mut tx = workspace_command.start_transaction();
     let (new_tree_id, partial_resolution_error) =

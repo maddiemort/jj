@@ -91,7 +91,7 @@ pub(crate) fn cmd_absorb(
         writeln!(ui.warning_default(), "Skipping {ui_path}: {reason}")?;
     }
 
-    workspace_command.check_rewritable(selected_trees.target_commits.keys())?;
+    workspace_command.check_rewritable(ui, selected_trees.target_commits.keys())?;
 
     let mut tx = workspace_command.start_transaction();
     let stats = absorb_hunks(tx.repo_mut(), &source, selected_trees.target_commits)?;
@@ -105,7 +105,7 @@ pub(crate) fn cmd_absorb(
             )?;
             print_updated_commits(
                 formatter.as_mut(),
-                &tx.commit_summary_template(),
+                &tx.commit_summary_template(ui)?,
                 stats.rewritten_destinations.iter().rev(),
             )?;
         }

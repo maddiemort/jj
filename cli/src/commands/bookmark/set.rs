@@ -110,12 +110,12 @@ pub fn cmd_bookmark_set(
                 formatter,
                 "Created {new_bookmark_count} bookmarks pointing to "
             )?;
-            tx.write_commit_summary(formatter.as_mut(), &target_commit)?;
+            tx.write_commit_summary(ui, formatter.as_mut(), &target_commit)??;
             writeln!(formatter)?;
         }
         if moved_bookmark_count > 0 {
             write!(formatter, "Moved {moved_bookmark_count} bookmarks to ")?;
-            tx.write_commit_summary(formatter.as_mut(), &target_commit)?;
+            tx.write_commit_summary(ui, formatter.as_mut(), &target_commit)??;
             writeln!(formatter)?;
         }
     }

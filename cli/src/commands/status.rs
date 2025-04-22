@@ -112,7 +112,7 @@ pub(crate) fn cmd_status(
             }
         }
 
-        let template = workspace_command.commit_summary_template();
+        let template = workspace_command.commit_summary_template(ui)?;
         write!(formatter, "Working copy  (@) : ")?;
         formatter.with_label("working_copy", |fmt| template.format(wc_commit, fmt))?;
         writeln!(formatter)?;
@@ -139,16 +139,21 @@ pub(crate) fn cmd_status(
             // Ancestors with conflicts, excluding the current working copy commit.
             let ancestors_conflicts: Vec<_> = workspace_command
                 .attach_revset_evaluator(
+                    ui,
                     wc_revset
                         .parents()
                         .ancestors()
                         .filtered(RevsetFilterPredicate::HasConflict)
-                        .minus(&workspace_command.env().immutable_expression()),
-                )
+                        .minus(
+                            &workspace_command
+                                .env()
+                                .immutable_expression(ui, repo.as_ref())?,
+                        ),
+                )?
                 .evaluate_to_commit_ids()?
                 .try_collect()?;
 
-            workspace_command.report_repo_conflicts(formatter, repo, ancestors_conflicts)?;
+            workspace_command.report_repo_conflicts(ui, formatter, repo, ancestors_conflicts)?;
         } else {
             for parent in wc_commit.parents() {
                 let parent = parent?;

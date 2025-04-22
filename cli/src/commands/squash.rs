@@ -162,12 +162,14 @@ pub(crate) fn cmd_squash(
         workspace_command.diff_selector(ui, args.tool.as_deref(), args.interactive)?;
     let text_editor = workspace_command.text_editor()?;
     let description = SquashedDescription::from_args(args);
-    workspace_command
-        .check_rewritable(sources.iter().chain(std::iter::once(&destination)).ids())?;
+    workspace_command.check_rewritable(
+        ui,
+        sources.iter().chain(std::iter::once(&destination)).ids(),
+    )?;
 
     let mut tx = workspace_command.start_transaction();
     let tx_description = format!("squash commits into {}", destination.id().hex());
-    let source_commits = select_diff(&tx, &sources, &destination, &matcher, &diff_selector)?;
+    let source_commits = select_diff(ui, &tx, &sources, &destination, &matcher, &diff_selector)?;
     if let Some(squashed) = rewrite::squash_commits(
         tx.repo_mut(),
         &source_commits,
@@ -247,6 +249,7 @@ impl SquashedDescription {
 }
 
 fn select_diff(
+    ui: &Ui,
     tx: &WorkspaceCommandTransaction,
     sources: &[Commit],
     destination: &Commit,
@@ -257,6 +260,8 @@ fn select_diff(
     for source in sources {
         let parent_tree = source.parent_tree(tx.repo())?;
         let source_tree = source.tree()?;
+        let source_summary = tx.format_commit_summary(ui, source)?;
+        let dest_summary = tx.format_commit_summary(ui, destination)?;
         let format_instructions = || {
             formatdoc! {"
                 You are moving changes from: {source}
@@ -270,8 +275,8 @@ fn select_diff(
                 to the destination. If you don't make any changes, then all the changes
                 from the source will be moved into the destination.
                 ",
-                source = tx.format_commit_summary(source),
-                destination = tx.format_commit_summary(destination),
+                source = source_summary,
+                destination = dest_summary,
             }
         };
         let selected_tree_id =

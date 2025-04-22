@@ -132,7 +132,7 @@ pub(crate) fn cmd_restore(
         from_tree = to_commit.parent_tree(workspace_command.repo().as_ref())?;
         from_commits = to_commit.parents().try_collect()?;
     }
-    workspace_command.check_rewritable([to_commit.id()])?;
+    workspace_command.check_rewritable(ui, [to_commit.id()])?;
 
     let matcher = workspace_command
         .parse_file_patterns(ui, &args.paths)?
@@ -140,6 +140,13 @@ pub(crate) fn cmd_restore(
     let diff_selector =
         workspace_command.diff_selector(ui, args.tool.as_deref(), args.interactive)?;
     let to_tree = to_commit.tree()?;
+    let from_summaries = from_commits
+        .iter()
+        .map(|commit| workspace_command.format_commit_summary(ui, commit))
+        .collect::<Result<Vec<_>, _>>()?
+        //      "You are restoring changes from: "
+        .join("\n                                ");
+    let to_summary = workspace_command.format_commit_summary(ui, &to_commit)?;
     let format_instructions = || {
         formatdoc! {"
             You are restoring changes from: {from_commits}
@@ -148,12 +155,8 @@ pub(crate) fn cmd_restore(
             The diff initially shows all changes restored. Adjust the right side until it
             shows the contents you want for the destination commit.
             ",
-            from_commits = from_commits
-                .iter()
-                .map(|commit| workspace_command.format_commit_summary(commit))
-                //      "You are restoring changes from: "
-                .join("\n                                "),
-            to_commit = workspace_command.format_commit_summary(&to_commit),
+            from_commits = from_summaries,
+            to_commit = to_summary,
         }
     };
     let new_tree_id = diff_selector.select(&to_tree, &from_tree, &matcher, format_instructions)?;
@@ -178,7 +181,7 @@ pub(crate) fn cmd_restore(
         };
         if let Some(mut formatter) = ui.status_formatter() {
             write!(formatter, "Created ")?;
-            tx.write_commit_summary(formatter.as_mut(), &new_commit)?;
+            tx.write_commit_summary(ui, formatter.as_mut(), &new_commit)??;
             writeln!(formatter)?;
             if num_rebased > 0 {
                 writeln!(

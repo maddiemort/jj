@@ -165,10 +165,13 @@ fn do_op_log(
             let parent_repo = repo_loader.load_at(&parent_op)?;
             let repo = repo_loader.load_at(op)?;
 
-            let id_prefix_context = workspace_env.new_id_prefix_context();
+            let id_prefix_context = workspace_env.new_id_prefix_context(ui, repo.as_ref())?;
             let commit_summary_template = {
-                let language =
-                    workspace_env.commit_template_language(repo.as_ref(), &id_prefix_context);
+                let language = workspace_env.commit_template_language(
+                    ui,
+                    repo.as_ref(),
+                    &id_prefix_context,
+                )?;
                 workspace_env.parse_template(
                     ui,
                     &language,

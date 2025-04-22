@@ -62,10 +62,11 @@ impl Direction {
 
     fn target_not_found_error(
         &self,
+        ui: &Ui,
         workspace_command: &WorkspaceCommandHelper,
         args: &MovementArgsInternal,
         commits: &[Commit],
-    ) -> CommandError {
+    ) -> Result<CommandError, CommandError> {
         let offset = args.offset;
         let err_msg = match (self, args.should_edit, args.conflict) {
             // in edit mode, start_revset is the WC, so we only look for direct descendants.
@@ -100,7 +101,7 @@ impl Direction {
             ),
         };
 
-        let template = workspace_command.commit_summary_template();
+        let template = workspace_command.commit_summary_template(ui)?;
         let mut cmd_err = user_error(err_msg);
         for commit in commits {
             cmd_err.add_formatted_hint_with(|formatter| {
@@ -113,7 +114,7 @@ impl Direction {
             });
         }
 
-        cmd_err
+        Ok(cmd_err)
     }
 
     fn build_target_revset(
@@ -182,7 +183,12 @@ fn get_target_commit(
                 .iter()
                 .commits(workspace_command.repo().store())
                 .try_collect()?;
-            return Err(direction.target_not_found_error(workspace_command, args, &start_commits));
+            return Err(direction.target_not_found_error(
+                ui,
+                workspace_command,
+                args,
+                &start_commits,
+            )?);
         }
         commits => choose_commit(ui, workspace_command, direction, commits)?,
     };
@@ -202,7 +208,7 @@ fn choose_commit<'a>(
         direction.cmd()
     )?;
     let mut formatter = ui.stderr_formatter();
-    let template = workspace_command.commit_summary_template();
+    let template = workspace_command.commit_summary_template(ui)?;
     let mut choices: Vec<String> = Default::default();
     for (i, commit) in commits.iter().enumerate() {
         write!(formatter, "{}: ", i + 1)?;
@@ -250,7 +256,7 @@ pub(crate) fn move_to_commit(
     // We're editing, just move to the target commit.
     if args.should_edit {
         // We're editing, the target must be rewritable.
-        workspace_command.check_rewritable([target.id()])?;
+        workspace_command.check_rewritable(ui, [target.id()])?;
         let mut tx = workspace_command.start_transaction();
         tx.edit(&target)?;
         tx.finish(

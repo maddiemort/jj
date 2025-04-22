@@ -77,7 +77,7 @@ pub(crate) fn cmd_parallelize(
         .parse_union_revsets(ui, &args.revisions)?
         .evaluate_to_commits()?
         .try_collect()?;
-    workspace_command.check_rewritable(target_commits.iter().ids())?;
+    workspace_command.check_rewritable(ui, target_commits.iter().ids())?;
 
     let mut tx = workspace_command.start_transaction();
 

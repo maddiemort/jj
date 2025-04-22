@@ -80,7 +80,7 @@ pub fn cmd_sign(ui: &mut Ui, command: &CommandHelper, args: &SignArgs) -> Result
 
     let to_sign: IndexSet<Commit> = revset_expression.evaluate_to_commits()?.try_collect()?;
 
-    workspace_command.check_rewritable(to_sign.iter().ids())?;
+    workspace_command.check_rewritable(ui, to_sign.iter().ids())?;
 
     let mut tx = workspace_command.start_transaction();
 
@@ -117,7 +117,7 @@ pub fn cmd_sign(ui: &mut Ui, command: &CommandHelper, args: &SignArgs) -> Result
             writeln!(formatter, "Signed {} commits:", signed_commits.len())?;
             print_updated_commits(
                 formatter.as_mut(),
-                &tx.commit_summary_template(),
+                &tx.commit_summary_template(ui)?,
                 &signed_commits,
             )?;
         }

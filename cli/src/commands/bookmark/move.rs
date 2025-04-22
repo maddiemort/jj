@@ -167,7 +167,7 @@ pub fn cmd_bookmark_move(
 
     if let Some(mut formatter) = ui.status_formatter() {
         write!(formatter, "Moved {} bookmarks to ", matched_bookmarks.len())?;
-        tx.write_commit_summary(formatter.as_mut(), &target_commit)?;
+        tx.write_commit_summary(ui, formatter.as_mut(), &target_commit)??;
         writeln!(formatter)?;
     }
     if matched_bookmarks.len() > 1 && args.names.is_empty() {

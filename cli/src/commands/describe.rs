@@ -125,7 +125,7 @@ pub(crate) fn cmd_describe(
         writeln!(ui.status(), "No revisions to describe.")?;
         return Ok(());
     }
-    workspace_command.check_rewritable(commits.iter().ids())?;
+    workspace_command.check_rewritable(ui, commits.iter().ids())?;
     let text_editor = workspace_command.text_editor()?;
 
     let mut tx = workspace_command.start_transaction();

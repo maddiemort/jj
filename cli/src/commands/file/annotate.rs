@@ -96,7 +96,7 @@ pub(crate) fn cmd_file_annotate(
             .settings()
             .get_string("templates.file_annotate")?,
     };
-    let language = workspace_command.commit_template_language();
+    let language = workspace_command.commit_template_language(ui)?;
     let template = workspace_command.parse_template(
         ui,
         &language,

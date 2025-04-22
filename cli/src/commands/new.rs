@@ -156,7 +156,7 @@ pub(crate) fn cmd_new(
     if args.no_edit {
         if let Some(mut formatter) = ui.status_formatter() {
             write!(formatter, "Created new commit ")?;
-            tx.write_commit_summary(formatter.as_mut(), &new_commit)?;
+            tx.write_commit_summary(ui, formatter.as_mut(), &new_commit)??;
             writeln!(formatter)?;
         }
     } else {

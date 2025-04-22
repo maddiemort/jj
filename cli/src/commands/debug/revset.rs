@@ -37,8 +37,8 @@ pub fn cmd_debug_revset(
     args: &DebugRevsetArgs,
 ) -> Result<(), CommandError> {
     let workspace_command = command.workspace_helper(ui)?;
-    let workspace_ctx = workspace_command.env().revset_parse_context();
     let repo = workspace_command.repo().as_ref();
+    let workspace_ctx = workspace_command.env().revset_parse_context(repo);
 
     let mut diagnostics = RevsetDiagnostics::new();
     let expression = revset::parse(&mut diagnostics, &args.revision, &workspace_ctx)?;
@@ -50,7 +50,7 @@ pub fn cmd_debug_revset(
     let symbol_resolver = revset_util::default_symbol_resolver(
         repo,
         command.revset_extensions().symbol_resolvers(),
-        workspace_command.id_prefix_context(),
+        workspace_command.id_prefix_context(ui)?,
     );
     let expression = expression.resolve_user_expression(repo, &symbol_resolver)?;
     writeln!(ui.stdout(), "-- Resolved:")?;

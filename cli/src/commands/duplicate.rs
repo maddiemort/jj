@@ -182,7 +182,7 @@ pub(crate) fn cmd_duplicate(
     if let Some(mut formatter) = ui.status_formatter() {
         for (old_id, new_commit) in &duplicated_commits {
             write!(formatter, "Duplicated {} as ", short_commit_hash(old_id))?;
-            tx.write_commit_summary(formatter.as_mut(), new_commit)?;
+            tx.write_commit_summary(ui, formatter.as_mut(), new_commit)??;
             writeln!(formatter)?;
         }
         if num_rebased > 0 {

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![feature(once_cell_try)]
 #![deny(unused_must_use)]
 
 pub mod cleanup_guard;

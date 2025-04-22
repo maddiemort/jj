@@ -261,7 +261,7 @@ pub(super) fn warn_unresolvable_trunk(
 pub(super) fn evaluate_revset_to_single_commit<'a>(
     revision_str: &str,
     expression: &RevsetExpressionEvaluator<'_>,
-    commit_summary_template: impl FnOnce() -> TemplateRenderer<'a, Commit>,
+    commit_summary_template: impl FnOnce() -> Result<TemplateRenderer<'a, Commit>, CommandError>,
     should_hint_about_all_prefix: bool,
 ) -> Result<Commit, CommandError> {
     let mut iter = expression.evaluate_to_commits()?.fuse();
@@ -279,7 +279,7 @@ pub(super) fn evaluate_revset_to_single_commit<'a>(
                 expression.expression(),
                 &commits,
                 elided,
-                &commit_summary_template(),
+                &commit_summary_template()?,
                 should_hint_about_all_prefix,
             ))
         }

@@ -72,10 +72,10 @@ pub(crate) fn cmd_simplify_parents(
         )
     };
     let commit_ids: Vec<_> = workspace_command
-        .attach_revset_evaluator(revs)
+        .attach_revset_evaluator(ui, revs)?
         .evaluate_to_commit_ids()?
         .try_collect()?;
-    workspace_command.check_rewritable(&commit_ids)?;
+    workspace_command.check_rewritable(ui, &commit_ids)?;
     let commit_ids_set: HashSet<_> = commit_ids.iter().cloned().collect();
     let num_orig_commits = commit_ids.len();
 

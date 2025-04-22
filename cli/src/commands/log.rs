@@ -139,7 +139,7 @@ pub(crate) fn cmd_log(
             workspace_command.parse_union_revsets(ui, &args.revisions)?
         } else {
             // a path was specified so we use all() and add path filter later
-            workspace_command.attach_revset_evaluator(RevsetExpression::all())
+            workspace_command.attach_revset_evaluator(ui, RevsetExpression::all())?
         };
         if !args.paths.is_empty() {
             // Beware that args.paths = ["root:."] is not identical to []. The
@@ -166,7 +166,7 @@ pub(crate) fn cmd_log(
     let template;
     let node_template;
     {
-        let language = workspace_command.commit_template_language();
+        let language = workspace_command.commit_template_language(ui)?;
         let template_string = match &args.template {
             Some(value) => value.to_string(),
             None => settings.get_string("templates.log")?,

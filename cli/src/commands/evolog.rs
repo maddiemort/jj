@@ -107,7 +107,7 @@ pub(crate) fn cmd_evolog(
     let template;
     let node_template;
     {
-        let language = workspace_command.commit_template_language();
+        let language = workspace_command.commit_template_language(ui)?;
         let template_string = match &args.template {
             Some(value) => value.to_string(),
             None => workspace_command.settings().get_string("templates.log")?,

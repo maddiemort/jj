@@ -792,8 +792,6 @@ pub struct WorkspaceCommandEnvironment {
     template_aliases_map: TemplateAliasesMap,
     path_converter: RepoPathUiConverter,
     workspace_name: WorkspaceNameBuf,
-    immutable_heads_expression: Rc<UserRevsetExpression>,
-    short_prefixes_expression: Option<Rc<UserRevsetExpression>>,
     conflict_marker_style: ConflictMarkerStyle,
 }
 
@@ -807,20 +805,15 @@ impl WorkspaceCommandEnvironment {
             cwd: command.cwd().to_owned(),
             base: workspace.workspace_root().to_owned(),
         };
-        let mut env = Self {
+        Ok(Self {
             command: command.clone(),
             settings: settings.clone(),
             revset_aliases_map,
             template_aliases_map,
             path_converter,
             workspace_name: workspace.workspace_name().to_owned(),
-            immutable_heads_expression: RevsetExpression::root(),
-            short_prefixes_expression: None,
             conflict_marker_style: settings.get("ui.conflict-marker-style")?,
-        };
-        env.immutable_heads_expression = env.load_immutable_heads_expression(ui)?;
-        env.short_prefixes_expression = env.load_short_prefixes_expression(ui)?;
-        Ok(env)
+        })
     }
 
     pub(crate) fn path_converter(&self) -> &RepoPathUiConverter {
@@ -862,24 +855,44 @@ impl WorkspaceCommandEnvironment {
 
     /// Creates fresh new context which manages cache of short commit/change ID
     /// prefixes. New context should be created per repo view (or operation.)
-    pub fn new_id_prefix_context(&self) -> IdPrefixContext {
+    pub fn new_id_prefix_context(
+        &self,
+        ui: &Ui,
+        repo: &dyn Repo,
+    ) -> Result<IdPrefixContext, CommandError> {
         let context = IdPrefixContext::new(self.command.revset_extensions().clone());
-        match &self.short_prefixes_expression {
+        Ok(match &self.short_prefixes_expression(ui, repo)? {
             None => context,
             Some(expression) => context.disambiguate_within(expression.clone()),
-        }
+        })
     }
 
     /// User-configured expression defining the immutable set.
-    pub fn immutable_expression(&self) -> Rc<UserRevsetExpression> {
+    pub fn immutable_expression(
+        &self,
+        ui: &Ui,
+        repo: &dyn Repo,
+    ) -> Result<Rc<UserRevsetExpression>, CommandError> {
         // Negated ancestors expression `~::(<heads> | root())` is slightly
         // easier to optimize than negated union `~(::<heads> | root())`.
-        self.immutable_heads_expression.ancestors()
+        self.immutable_heads_expression(ui, repo)
+            .map(|expr| expr.ancestors())
     }
 
     /// User-configured expression defining the heads of the immutable set.
-    pub fn immutable_heads_expression(&self) -> &Rc<UserRevsetExpression> {
-        &self.immutable_heads_expression
+    pub fn immutable_heads_expression(
+        &self,
+        ui: &Ui,
+        repo: &dyn Repo,
+    ) -> Result<Rc<UserRevsetExpression>, CommandError> {
+        let mut diagnostics = RevsetDiagnostics::new();
+        let expression = revset_util::parse_immutable_heads_expression(
+            &mut diagnostics,
+            &self.revset_parse_context(repo),
+        )
+        .map_err(|e| config_error_with_message("Invalid `revset-aliases.immutable_heads()`", e))?;
+        print_parse_diagnostics(ui, "In `revset-aliases.immutable_heads()`", &diagnostics)?;
+        Ok(expression)
     }
 
     /// User-configured conflict marker style for materializing conflicts
@@ -887,23 +900,10 @@ impl WorkspaceCommandEnvironment {
         self.conflict_marker_style
     }
 
-    fn load_immutable_heads_expression(
+    fn short_prefixes_expression(
         &self,
         ui: &Ui,
-    ) -> Result<Rc<UserRevsetExpression>, CommandError> {
-        let mut diagnostics = RevsetDiagnostics::new();
-        let expression = revset_util::parse_immutable_heads_expression(
-            &mut diagnostics,
-            &self.revset_parse_context(),
-        )
-        .map_err(|e| config_error_with_message("Invalid `revset-aliases.immutable_heads()`", e))?;
-        print_parse_diagnostics(ui, "In `revset-aliases.immutable_heads()`", &diagnostics)?;
-        Ok(expression)
-    }
-
-    fn load_short_prefixes_expression(
-        &self,
-        ui: &Ui,
+        repo: &dyn Repo,
     ) -> Result<Option<Rc<UserRevsetExpression>>, CommandError> {
         let revset_string = self
             .settings
@@ -917,7 +917,7 @@ impl WorkspaceCommandEnvironment {
             let (expression, modifier) = revset::parse_with_modifier(
                 &mut diagnostics,
                 &revset_string,
-                &self.revset_parse_context(),
+                &self.revset_parse_context(repo),
             )
             .map_err(|err| config_error_with_message("Invalid `revsets.short-prefixes`", err))?;
             print_parse_diagnostics(ui, "In `revsets.short-prefixes`", &diagnostics)?;
@@ -930,6 +930,7 @@ impl WorkspaceCommandEnvironment {
     /// immutable commits.
     fn find_immutable_commit<'a>(
         &self,
+        ui: &Ui,
         repo: &dyn Repo,
         commits: impl IntoIterator<Item = &'a CommitId>,
     ) -> Result<Option<(CommitId, usize, Option<usize>)>, CommandError> {
@@ -951,7 +952,7 @@ impl WorkspaceCommandEnvironment {
             repo,
             self.command.revset_extensions().clone(),
             &id_prefix_context,
-            self.immutable_expression(),
+            self.immutable_expression(ui, repo)?,
         );
         expression.intersect_with(&to_rewrite_revset);
 
@@ -967,7 +968,7 @@ impl WorkspaceCommandEnvironment {
             repo,
             self.command.revset_extensions().clone(),
             &id_prefix_context,
-            self.immutable_expression(),
+            self.immutable_expression(ui, repo)?,
         );
         bounds.intersect_with(&to_rewrite_revset.descendants());
         let (lower, upper) = bounds.evaluate()?.count_estimate()?;
@@ -1006,19 +1007,20 @@ impl WorkspaceCommandEnvironment {
     /// given `repo`.
     pub fn commit_template_language<'a>(
         &'a self,
+        ui: &Ui,
         repo: &'a dyn Repo,
         id_prefix_context: &'a IdPrefixContext,
-    ) -> CommitTemplateLanguage<'a> {
-        CommitTemplateLanguage::new(
+    ) -> Result<CommitTemplateLanguage<'a>, CommandError> {
+        Ok(CommitTemplateLanguage::new(
             repo,
             &self.path_converter,
             &self.workspace_name,
             self.revset_parse_context(repo),
             id_prefix_context,
-            self.immutable_expression(),
+            self.immutable_expression(ui, repo)?,
             self.conflict_marker_style,
             &self.command.data.commit_template_extensions,
-        )
+        ))
     }
 
     pub fn operation_template_extensions(&self) -> &[Arc<dyn OperationTemplateLanguageExtension>] {
@@ -1609,7 +1611,7 @@ to the current parents may contain changes from multiple commits.
         revset_util::evaluate_revset_to_single_commit(
             revision_arg.as_ref(),
             &expression,
-            || self.commit_summary_template(),
+            || self.commit_summary_template(ui),
             should_hint_about_all_prefix,
         )
     }
@@ -1640,7 +1642,7 @@ to the current parents may contain changes from multiple commits.
                 let commit = revset_util::evaluate_revset_to_single_commit(
                     revision_arg.as_ref(),
                     &expression,
-                    || self.commit_summary_template(),
+                    || self.commit_summary_template(ui),
                     should_hint_about_all_prefix,
                 )?;
                 if !all_commits.insert(commit.id().clone()) {
@@ -1680,7 +1682,7 @@ to the current parents may contain changes from multiple commits.
         let (expression, modifier) =
             revset::parse_with_modifier(&mut diagnostics, revision_arg.as_ref(), &context)?;
         print_parse_diagnostics(ui, "In revset expression", &diagnostics)?;
-        Ok((self.attach_revset_evaluator(expression), modifier))
+        Ok((self.attach_revset_evaluator(ui, expression)?, modifier))
     }
 
     /// Parses the given revset expressions and concatenates them all.
@@ -1698,25 +1700,26 @@ to the current parents may contain changes from multiple commits.
             .try_collect()?;
         print_parse_diagnostics(ui, "In revset expression", &diagnostics)?;
         let expression = RevsetExpression::union_all(&expressions);
-        Ok(self.attach_revset_evaluator(expression))
+        self.attach_revset_evaluator(ui, expression)
     }
 
     pub fn attach_revset_evaluator(
         &self,
+        ui: &Ui,
         expression: Rc<UserRevsetExpression>,
-    ) -> RevsetExpressionEvaluator<'_> {
-        RevsetExpressionEvaluator::new(
+    ) -> Result<RevsetExpressionEvaluator<'_>, CommandError> {
+        Ok(RevsetExpressionEvaluator::new(
             self.repo().as_ref(),
             self.env.command.revset_extensions().clone(),
-            self.id_prefix_context(),
+            self.id_prefix_context(ui)?,
             expression,
-        )
+        ))
     }
 
-    pub fn id_prefix_context(&self) -> &IdPrefixContext {
+    pub fn id_prefix_context(&self, ui: &Ui) -> Result<&IdPrefixContext, CommandError> {
         self.user_repo
             .id_prefix_context
-            .get_or_init(|| self.env.new_id_prefix_context())
+            .get_or_try_init(|| self.env.new_id_prefix_context(ui, self.repo().as_ref()))
     }
 
     /// Parses template of the given language into evaluation tree.
@@ -1757,7 +1760,7 @@ to the current parents may contain changes from multiple commits.
         ui: &Ui,
         template_text: &str,
     ) -> Result<TemplateRenderer<'_, Commit>, CommandError> {
-        let language = self.commit_template_language();
+        let language = self.commit_template_language(ui)?;
         self.parse_template(
             ui,
             &language,
@@ -1782,9 +1785,12 @@ to the current parents may contain changes from multiple commits.
     }
 
     /// Creates commit template language environment for this workspace.
-    pub fn commit_template_language(&self) -> CommitTemplateLanguage<'_> {
+    pub fn commit_template_language(
+        &self,
+        ui: &Ui,
+    ) -> Result<CommitTemplateLanguage<'_>, CommandError> {
         self.env
-            .commit_template_language(self.repo().as_ref(), self.id_prefix_context())
+            .commit_template_language(ui, self.repo().as_ref(), self.id_prefix_context(ui)?)
     }
 
     /// Creates operation template language environment for this workspace.
@@ -1797,13 +1803,16 @@ to the current parents may contain changes from multiple commits.
     }
 
     /// Template for one-line summary of a commit.
-    pub fn commit_summary_template(&self) -> TemplateRenderer<'_, Commit> {
-        let language = self.commit_template_language();
-        self.reparse_valid_template(
+    pub fn commit_summary_template(
+        &self,
+        ui: &Ui,
+    ) -> Result<TemplateRenderer<'_, Commit>, CommandError> {
+        let language = self.commit_template_language(ui)?;
+        Ok(self.reparse_valid_template(
             &language,
             &self.commit_summary_template_text,
             CommitTemplateLanguage::wrap_commit,
-        )
+        ))
     }
 
     /// Template for one-line summary of an operation.
@@ -1817,25 +1826,27 @@ to the current parents may contain changes from multiple commits.
         .labeled("operation")
     }
 
-    pub fn short_change_id_template(&self) -> TemplateRenderer<'_, Commit> {
-        let language = self.commit_template_language();
-        self.reparse_valid_template(
+    pub fn short_change_id_template(
+        &self,
+        ui: &Ui,
+    ) -> Result<TemplateRenderer<'_, Commit>, CommandError> {
+        let language = self.commit_template_language(ui)?;
+        Ok(self.reparse_valid_template(
             &language,
             SHORT_CHANGE_ID_TEMPLATE_TEXT,
             CommitTemplateLanguage::wrap_commit,
-        )
+        ))
     }
 
     /// Returns one-line summary of the given `commit`.
     ///
     /// Use `write_commit_summary()` to get colorized output. Use
     /// `commit_summary_template()` if you have many commits to process.
-    pub fn format_commit_summary(&self, commit: &Commit) -> String {
+    pub fn format_commit_summary(&self, ui: &Ui, commit: &Commit) -> Result<String, CommandError> {
         let mut output = Vec::new();
-        self.write_commit_summary(&mut PlainTextFormatter::new(&mut output), commit)
-            .expect("write() to PlainTextFormatter should never fail");
+        self.write_commit_summary(ui, &mut PlainTextFormatter::new(&mut output), commit)??;
         // Template output is usually UTF-8, but it can contain file content.
-        output.into_string_lossy()
+        Ok(output.into_string_lossy())
     }
 
     /// Writes one-line summary of the given `commit`.
@@ -1844,19 +1855,21 @@ to the current parents may contain changes from multiple commits.
     #[instrument(skip_all)]
     pub fn write_commit_summary(
         &self,
+        ui: &Ui,
         formatter: &mut dyn Formatter,
         commit: &Commit,
-    ) -> std::io::Result<()> {
-        self.commit_summary_template().format(commit, formatter)
+    ) -> Result<io::Result<()>, CommandError> {
+        Ok(self.commit_summary_template(ui)?.format(commit, formatter))
     }
 
     pub fn check_rewritable<'a>(
         &self,
+        ui: &Ui,
         commits: impl IntoIterator<Item = &'a CommitId>,
     ) -> Result<(), CommandError> {
-        let Some((commit_id, lower_bound, upper_bound)) = self
-            .env
-            .find_immutable_commit(self.repo().as_ref(), commits)?
+        let Some((commit_id, lower_bound, upper_bound)) =
+            self.env
+                .find_immutable_commit(ui, self.repo().as_ref(), commits)?
         else {
             return Ok(());
         };
@@ -1865,9 +1878,10 @@ to the current parents may contain changes from multiple commits.
         } else {
             let mut error = user_error(format!("Commit {commit_id:.12} is immutable"));
             let commit = self.repo().store().get_commit(&commit_id)?;
+            let commit_summary_template = self.commit_summary_template(ui)?;
             error.add_formatted_hint_with(|formatter| {
                 write!(formatter, "Could not modify commit: ")?;
-                self.write_commit_summary(formatter, &commit)?;
+                commit_summary_template.format(&commit, formatter)?;
                 Ok(())
             });
             error.add_hint("Immutable commits are used to protect shared history.");
@@ -2060,7 +2074,7 @@ See https://jj-vcs.github.io/jj/latest/working-copy/#stale-working-copy \
     ) -> Result<(), CommandError> {
         if Some(new_commit) != maybe_old_commit {
             if let Some(mut formatter) = ui.status_formatter() {
-                let template = self.commit_summary_template();
+                let template = self.commit_summary_template(ui)?;
                 write!(formatter, "Working copy  (@) now at: ")?;
                 formatter.with_label("working_copy", |fmt| template.format(new_commit, fmt))?;
                 writeln!(formatter)?;
@@ -2117,7 +2131,7 @@ See https://jj-vcs.github.io/jj/latest/working-copy/#stale-working-copy \
         for (name, wc_commit_id) in &tx.repo().view().wc_commit_ids().clone() {
             if self
                 .env
-                .find_immutable_commit(tx.repo(), [wc_commit_id])?
+                .find_immutable_commit(ui, tx.repo(), [wc_commit_id])?
                 .is_some()
             {
                 let wc_commit = tx.repo().store().get_commit(wc_commit_id)?;
@@ -2287,7 +2301,7 @@ See https://jj-vcs.github.io/jj/latest/working-copy/#stale-working-copy \
             writeln!(fmt, "New conflicts appeared in {num_conflicted} commits:")?;
             print_updated_commits(
                 fmt.as_mut(),
-                &self.commit_summary_template(),
+                &self.commit_summary_template(ui)?,
                 new_conflicts_by_change_id.values().flatten().copied(),
             )?;
         }
@@ -2310,6 +2324,7 @@ See https://jj-vcs.github.io/jj/latest/working-copy/#stale-working-copy \
             }
 
             self.report_repo_conflicts(
+                ui,
                 fmt.as_mut(),
                 new_repo,
                 added_conflict_commits
@@ -2325,6 +2340,7 @@ See https://jj-vcs.github.io/jj/latest/working-copy/#stale-working-copy \
 
     pub fn report_repo_conflicts(
         &self,
+        ui: &Ui,
         fmt: &mut dyn Formatter,
         repo: &ReadonlyRepo,
         conflicted_commits: Vec<CommitId>,
@@ -2352,7 +2368,7 @@ See https://jj-vcs.github.io/jj/latest/working-copy/#stale-working-copy \
                 "To resolve the conflicts, start by updating to one of the first ones"
             };
             writeln!(fmt.labeled("hint").with_heading("Hint: "), "{instruction}:")?;
-            let format_short_change_id = self.short_change_id_template();
+            let format_short_change_id = self.short_change_id_template(ui)?;
             fmt.with_label("hint", |fmt| {
                 for commit in &root_conflict_commits {
                     write!(fmt, "  jj new ")?;
@@ -2462,41 +2478,48 @@ impl WorkspaceCommandTransaction<'_> {
         self.tx.repo_mut().edit(name, commit)
     }
 
-    pub fn format_commit_summary(&self, commit: &Commit) -> String {
+    pub fn format_commit_summary(&self, ui: &Ui, commit: &Commit) -> Result<String, CommandError> {
         let mut output = Vec::new();
-        self.write_commit_summary(&mut PlainTextFormatter::new(&mut output), commit)
+        self.write_commit_summary(ui, &mut PlainTextFormatter::new(&mut output), commit)?
             .expect("write() to PlainTextFormatter should never fail");
         // Template output is usually UTF-8, but it can contain file content.
-        output.into_string_lossy()
+        Ok(output.into_string_lossy())
     }
 
     pub fn write_commit_summary(
         &self,
+        ui: &Ui,
         formatter: &mut dyn Formatter,
         commit: &Commit,
-    ) -> std::io::Result<()> {
-        self.commit_summary_template().format(commit, formatter)
+    ) -> Result<std::io::Result<()>, CommandError> {
+        Ok(self.commit_summary_template(ui)?.format(commit, formatter))
     }
 
     /// Template for one-line summary of a commit within transaction.
-    pub fn commit_summary_template(&self) -> TemplateRenderer<'_, Commit> {
-        let language = self.commit_template_language();
-        self.helper.reparse_valid_template(
+    pub fn commit_summary_template(
+        &self,
+        ui: &Ui,
+    ) -> Result<TemplateRenderer<'_, Commit>, CommandError> {
+        let language = self.commit_template_language(ui)?;
+        Ok(self.helper.reparse_valid_template(
             &language,
             &self.helper.commit_summary_template_text,
             CommitTemplateLanguage::wrap_commit,
-        )
+        ))
     }
 
     /// Creates commit template language environment capturing the current
     /// transaction state.
-    pub fn commit_template_language(&self) -> CommitTemplateLanguage<'_> {
+    pub fn commit_template_language(
+        &self,
+        ui: &Ui,
+    ) -> Result<CommitTemplateLanguage<'_>, CommandError> {
         let id_prefix_context = self
             .id_prefix_context
-            .get_or_init(|| self.helper.env.new_id_prefix_context());
+            .get_or_try_init(|| self.helper.env.new_id_prefix_context(ui, self.tx.repo()))?;
         self.helper
             .env
-            .commit_template_language(self.tx.repo(), id_prefix_context)
+            .commit_template_language(ui, self.tx.repo(), id_prefix_context)
     }
 
     /// Parses commit template with the current transaction state.
@@ -2505,7 +2528,7 @@ impl WorkspaceCommandTransaction<'_> {
         ui: &Ui,
         template_text: &str,
     ) -> Result<TemplateRenderer<'_, Commit>, CommandError> {
-        let language = self.commit_template_language();
+        let language = self.commit_template_language(ui)?;
         self.helper.env.parse_template(
             ui,
             &language,
@@ -3177,7 +3200,7 @@ pub fn compute_commit_location(
         };
 
     if !new_child_ids.is_empty() {
-        workspace_command.check_rewritable(new_child_ids.iter())?;
+        workspace_command.check_rewritable(ui, new_child_ids.iter())?;
         ensure_no_commit_loop(
             workspace_command.repo().as_ref(),
             &RevsetExpression::commits(new_child_ids.clone()),

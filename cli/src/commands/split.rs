@@ -100,7 +100,7 @@ impl SplitArgs {
                 "Use `jj new` if you want to create another empty commit.",
             ));
         }
-        workspace_command.check_rewritable([target_commit.id()])?;
+        workspace_command.check_rewritable(ui, [target_commit.id()])?;
         let matcher = workspace_command
             .parse_file_patterns(ui, &self.paths)?
             .to_matcher();
@@ -242,9 +242,9 @@ pub(crate) fn cmd_split(
             writeln!(formatter, "Rebased {num_rebased} descendant commits")?;
         }
         write!(formatter, "First part: ")?;
-        tx.write_commit_summary(formatter.as_mut(), &first_commit)?;
+        tx.write_commit_summary(ui, formatter.as_mut(), &first_commit)??;
         write!(formatter, "\nSecond part: ")?;
-        tx.write_commit_summary(formatter.as_mut(), &second_commit)?;
+        tx.write_commit_summary(ui, formatter.as_mut(), &second_commit)??;
         writeln!(formatter)?;
     }
     tx.finish(ui, format!("split commit {}", target.commit.id().hex()))?;
@@ -260,6 +260,7 @@ fn select_diff(
     matcher: &dyn Matcher,
     diff_selector: &DiffSelector,
 ) -> Result<CommitWithSelection, CommandError> {
+    let commit_summary = tx.format_commit_summary(ui, target_commit)?;
     let format_instructions = || {
         format!(
             "\
@@ -270,7 +271,7 @@ The diff initially shows the changes in the commit you're splitting.
 Adjust the right side until it shows the contents you want for the first commit.
 The remainder will be in the second commit.
 ",
-            tx.format_commit_summary(target_commit)
+            commit_summary,
         )
     };
     let parent_tree = target_commit.parent_tree(tx.repo())?;
