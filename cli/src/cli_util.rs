@@ -473,7 +473,11 @@ impl CommandHelper {
         let op_head = self.resolve_operation(ui, workspace.repo_loader())?;
         let repo = workspace.repo_loader().load_at(&op_head)?;
         let env = self.workspace_environment(ui, &workspace)?;
-        revset_util::warn_unresolvable_trunk(ui, repo.as_ref(), &env.revset_parse_context())?;
+        revset_util::warn_unresolvable_trunk(
+            ui,
+            repo.as_ref(),
+            &env.revset_parse_context(repo.as_ref()),
+        )?;
         WorkspaceCommandHelper::new(ui, workspace, repo, env, self.is_at_head_operation())
     }
 
@@ -827,7 +831,7 @@ impl WorkspaceCommandEnvironment {
         &self.workspace_name
     }
 
-    pub(crate) fn revset_parse_context(&self) -> RevsetParseContext {
+    pub(crate) fn revset_parse_context(&self, repo: &dyn Repo) -> RevsetParseContext {
         let workspace_context = RevsetWorkspaceContext {
             path_converter: &self.path_converter,
             workspace_name: &self.workspace_name,
@@ -847,8 +851,13 @@ impl WorkspaceCommandEnvironment {
             extensions: self.command.revset_extensions(),
             workspace: Some(workspace_context),
             // TODO: Consider handling errors here.
-            mailmap: Rc::new(self.current_mailmap().unwrap_or_default()),
+            mailmap: Rc::new(self.current_mailmap(repo).unwrap_or_default()),
         }
+    }
+
+    pub fn current_mailmap(&self, repo: &dyn Repo) -> Result<Mailmap, CommandError> {
+        // TODO: Consider figuring out a caching strategy for this.
+        Ok(read_current_mailmap(repo, self.workspace_name()).block_on()?)
     }
 
     /// Creates fresh new context which manages cache of short commit/change ID
@@ -1004,7 +1013,7 @@ impl WorkspaceCommandEnvironment {
             repo,
             &self.path_converter,
             &self.workspace_name,
-            self.revset_parse_context(),
+            self.revset_parse_context(repo),
             id_prefix_context,
             self.immutable_expression(),
             self.conflict_marker_style,
@@ -1334,12 +1343,12 @@ to the current parents may contain changes from multiple commits.
         self.repo().view().get_wc_commit_id(self.workspace_name())
     }
 
+    pub(crate) fn revset_parse_context(&self) -> RevsetParseContext {
+        self.env.revset_parse_context(self.repo().as_ref())
+    }
+
     pub fn current_mailmap(&self) -> Result<Mailmap, CommandError> {
-        // TODO: Consider figuring out a caching strategy for this.
-        Ok(
-            read_current_mailmap(self.repo().as_ref(), self.workspace.workspace_name())
-                .block_on()?,
-        )
+        self.env.current_mailmap(self.repo().as_ref())
     }
 
     pub fn working_copy_shared_with_git(&self) -> bool {
@@ -1667,7 +1676,7 @@ to the current parents may contain changes from multiple commits.
         revision_arg: &RevisionArg,
     ) -> Result<(RevsetExpressionEvaluator<'_>, Option<RevsetModifier>), CommandError> {
         let mut diagnostics = RevsetDiagnostics::new();
-        let context = self.env.revset_parse_context();
+        let context = self.revset_parse_context();
         let (expression, modifier) =
             revset::parse_with_modifier(&mut diagnostics, revision_arg.as_ref(), &context)?;
         print_parse_diagnostics(ui, "In revset expression", &diagnostics)?;
@@ -1681,7 +1690,7 @@ to the current parents may contain changes from multiple commits.
         revision_args: &[RevisionArg],
     ) -> Result<RevsetExpressionEvaluator<'_>, CommandError> {
         let mut diagnostics = RevsetDiagnostics::new();
-        let context = self.env.revset_parse_context();
+        let context = self.revset_parse_context();
         let expressions: Vec<_> = revision_args
             .iter()
             .map(|arg| revset::parse_with_modifier(&mut diagnostics, arg.as_ref(), &context))
@@ -2309,7 +2318,7 @@ See https://jj-vcs.github.io/jj/latest/working-copy/#stale-working-copy \
                     .collect(),
             )?;
         }
-        revset_util::warn_unresolvable_trunk(ui, new_repo, &self.env.revset_parse_context())?;
+        revset_util::warn_unresolvable_trunk(ui, new_repo, &self.revset_parse_context())?;
 
         Ok(())
     }
