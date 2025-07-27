@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::io::Write as _;
 
 use clap_complete::ArgValueCompleter;
@@ -121,6 +122,7 @@ pub(crate) async fn cmd_file_edit(
         eol_conversion_mode: EolConversionMode::None,
         exec_change_setting: ExecChangeSetting::Auto,
         fsmonitor_settings: FsmonitorSettings::None,
+        ignore_filters: HashSet::new(),
     };
     let mut tree_state = TreeState::init(
         repo.store().clone(),
