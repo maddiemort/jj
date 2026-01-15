@@ -142,17 +142,30 @@ pub async fn cmd_op_diff(
         (!formats.is_empty())
             .then(|| DiffRenderer::new(merged_repo, path_converter, conflict_marker_style, formats))
     };
-    let id_prefix_context = workspace_env.new_id_prefix_context();
+    let id_prefix_context = workspace_command.new_id_prefix_context();
     let commit_summary_template = {
-        let language = workspace_env.commit_template_language(merged_repo, &id_prefix_context);
+        let language =
+            workspace_command.commit_template_language_for(merged_repo, &id_prefix_context);
         let text = settings.get_string("templates.commit_summary")?;
         workspace_env
             .parse_template(ui, &language, &text)?
             .labeled(["op_diff", "commit"])
     };
 
-    let op_diff_changes_expr =
-        parse_op_diff_changes_in(ui, settings, workspace_env, args.show_changes_in.as_deref())?;
+    let op_diff_changes_expr_from = parse_op_diff_changes_in(
+        ui,
+        settings,
+        workspace_env,
+        from_repo.as_ref(),
+        args.show_changes_in.as_deref(),
+    )?;
+    let op_diff_changes_expr_to = parse_op_diff_changes_in(
+        ui,
+        settings,
+        workspace_env,
+        to_repo.as_ref(),
+        args.show_changes_in.as_deref(),
+    )?;
 
     let op_summary_template = workspace_command
         .operation_summary_template()
@@ -180,7 +193,8 @@ pub async fn cmd_op_diff(
         (!args.no_graph).then_some(graph_style),
         &with_content_format,
         diff_renderer.as_ref(),
-        op_diff_changes_expr,
+        op_diff_changes_expr_from,
+        op_diff_changes_expr_to,
     )
     .await
 }
@@ -190,6 +204,7 @@ pub fn parse_op_diff_changes_in(
     ui: &Ui,
     settings: &UserSettings,
     workspace_env: &WorkspaceCommandEnvironment,
+    repo: &dyn Repo,
     show_changes_in: Option<&str>,
 ) -> Result<Arc<UserRevsetExpression>, CommandError> {
     let (expression_str, is_config) = if let Some(show_changes_in_expr) = show_changes_in {
@@ -201,7 +216,7 @@ pub fn parse_op_diff_changes_in(
     let op_diff_changes_expr = revset::parse(
         &mut diagnostics,
         &expression_str,
-        &workspace_env.revset_parse_context(),
+        &workspace_env.revset_parse_context_for(repo),
     )
     .map_err(|err| {
         if is_config {
@@ -226,20 +241,25 @@ pub fn parse_op_diff_changes_in(
 /// repositories.
 fn resolve_op_diff_changes_exprs(
     workspace_env: &WorkspaceCommandEnvironment,
-    op_diff_changes_expr: &UserRevsetExpression,
+    op_diff_changes_expr_from: &UserRevsetExpression,
+    op_diff_changes_expr_to: &UserRevsetExpression,
     from_repo: &ReadonlyRepo,
     to_repo: &ReadonlyRepo,
 ) -> Result<(Arc<ResolvedRevsetExpression>, Arc<ResolvedRevsetExpression>), RevsetResolutionError> {
-    let extensions = workspace_env
-        .revset_parse_context()
+    let from_repo_extensions = workspace_env
+        .revset_parse_context_for(from_repo)
         .extensions
         .symbol_resolvers();
-    let from_repo_symbol_resolver = SymbolResolver::new(from_repo, extensions);
-    let to_repo_symbol_resolver = SymbolResolver::new(to_repo, extensions);
+    let from_repo_symbol_resolver = SymbolResolver::new(from_repo, from_repo_extensions);
+    let to_repo_extensions = workspace_env
+        .revset_parse_context_for(to_repo)
+        .extensions
+        .symbol_resolvers();
+    let to_repo_symbol_resolver = SymbolResolver::new(to_repo, to_repo_extensions);
     let from_op_diff_changes_expr =
-        op_diff_changes_expr.resolve_user_expression(from_repo, &from_repo_symbol_resolver)?;
+        op_diff_changes_expr_from.resolve_user_expression(from_repo, &from_repo_symbol_resolver)?;
     let to_op_diff_changes_expr =
-        op_diff_changes_expr.resolve_user_expression(to_repo, &to_repo_symbol_resolver)?;
+        op_diff_changes_expr_to.resolve_user_expression(to_repo, &to_repo_symbol_resolver)?;
     Ok((from_op_diff_changes_expr, to_op_diff_changes_expr))
 }
 
@@ -259,11 +279,13 @@ pub async fn show_op_diff(
     graph_style: Option<GraphStyle>,
     with_content_format: &LogContentFormat,
     diff_renderer: Option<&DiffRenderer<'_>>,
-    op_diff_changes_expr: Arc<UserRevsetExpression>,
+    op_diff_changes_expr_from: Arc<UserRevsetExpression>,
+    op_diff_changes_expr_to: Arc<UserRevsetExpression>,
 ) -> Result<(), CommandError> {
     let op_commits_diff_result = match resolve_op_diff_changes_exprs(
         workspace_env,
-        &op_diff_changes_expr,
+        &op_diff_changes_expr_from,
+        &op_diff_changes_expr_to,
         from_repo.as_ref(),
         to_repo.as_ref(),
     ) {

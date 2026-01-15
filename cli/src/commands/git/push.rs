@@ -501,7 +501,7 @@ fn ready_to_push_revset_expression(
         .cloned()
         .collect_vec();
     RevsetExpression::commits(old_heads)
-        .union(workspace_helper.env().immutable_heads_expression())
+        .union(workspace_helper.immutable_heads_expression())
         .range(&RevsetExpression::commits(new_heads))
 }
 

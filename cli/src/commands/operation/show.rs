@@ -95,9 +95,10 @@ pub async fn cmd_op_show(
     let parent_repo = repo_loader.load_at(&merged_parent_op).await?;
     let repo = repo_loader.load_at(&op).await?;
 
-    let id_prefix_context = workspace_env.new_id_prefix_context();
+    let id_prefix_context = workspace_command.new_id_prefix_context();
     let commit_summary_template = {
-        let language = workspace_env.commit_template_language(repo.as_ref(), &id_prefix_context);
+        let language =
+            workspace_command.commit_template_language_for(repo.as_ref(), &id_prefix_context);
         let text = settings.get_string("templates.commit_summary")?;
         workspace_env
             .parse_template(ui, &language, &text)?
@@ -130,8 +131,20 @@ pub async fn cmd_op_show(
             .labeled(["op_show", "operation"])
     };
 
-    let op_diff_changes_expr =
-        parse_op_diff_changes_in(ui, settings, workspace_env, args.show_changes_in.as_deref())?;
+    let op_diff_changes_expr_parent = parse_op_diff_changes_in(
+        ui,
+        settings,
+        workspace_env,
+        parent_repo.as_ref(),
+        args.show_changes_in.as_deref(),
+    )?;
+    let op_diff_changes_expr_repo = parse_op_diff_changes_in(
+        ui,
+        settings,
+        workspace_env,
+        repo.as_ref(),
+        args.show_changes_in.as_deref(),
+    )?;
 
     ui.request_pager();
     let mut formatter = ui.stdout_formatter();
@@ -154,7 +167,8 @@ pub async fn cmd_op_show(
             (!args.no_graph).then_some(graph_style),
             &with_content_format,
             diff_renderer.as_ref(),
-            op_diff_changes_expr,
+            op_diff_changes_expr_parent,
+            op_diff_changes_expr_repo,
         )
         .await?;
     }
