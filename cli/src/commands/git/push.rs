@@ -512,7 +512,7 @@ fn validate_commits_ready_to_push(
         .cloned()
         .collect_vec();
     let commits_to_push = RevsetExpression::commits(old_heads)
-        .union(workspace_helper.env().immutable_heads_expression())
+        .union(workspace_helper.immutable_heads_expression())
         .range(&RevsetExpression::commits(new_heads));
 
     let settings = workspace_helper.settings();

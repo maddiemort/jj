@@ -483,9 +483,10 @@ impl CommandHelper {
         let op_head = self.resolve_operation(ui, workspace.repo_loader())?;
         let repo = workspace.repo_loader().load_at(&op_head)?;
         let mut env = self.workspace_environment(ui, &workspace)?;
-        if let Err(err) =
-            revset_util::try_resolve_trunk_alias(repo.as_ref(), &env.revset_parse_context())
-        {
+        if let Err(err) = revset_util::try_resolve_trunk_alias(
+            repo.as_ref(),
+            &env.revset_parse_context_for(repo.as_ref()),
+        ) {
             // The fallback can be builtin_trunk() if we're willing to support
             // inferred trunk forever. (#7990)
             let fallback = "root()";
@@ -504,7 +505,6 @@ impl CommandHelper {
             env.revset_aliases_map
                 .insert("trunk()", fallback)
                 .expect("valid syntax");
-            env.reload_revset_expressions(ui)?;
         }
         WorkspaceCommandHelper::new(ui, workspace, repo, env, self.is_at_head_operation())
     }
@@ -810,8 +810,6 @@ pub struct WorkspaceCommandEnvironment {
     revsets_use_glob_by_default: bool,
     path_converter: RepoPathUiConverter,
     workspace_name: WorkspaceNameBuf,
-    immutable_heads_expression: Arc<UserRevsetExpression>,
-    short_prefixes_expression: Option<Arc<UserRevsetExpression>>,
     conflict_marker_style: ConflictMarkerStyle,
 }
 
@@ -826,7 +824,7 @@ impl WorkspaceCommandEnvironment {
             cwd: command.cwd().to_owned(),
             base: workspace.workspace_root().to_owned(),
         };
-        let mut env = Self {
+        Ok(Self {
             command: command.clone(),
             settings: settings.clone(),
             revset_aliases_map,
@@ -835,12 +833,8 @@ impl WorkspaceCommandEnvironment {
             revsets_use_glob_by_default: settings.get("ui.revsets-use-glob-by-default")?,
             path_converter,
             workspace_name: workspace.workspace_name().to_owned(),
-            immutable_heads_expression: RevsetExpression::root(),
-            short_prefixes_expression: None,
             conflict_marker_style: settings.get("ui.conflict-marker-style")?,
-        };
-        env.reload_revset_expressions(ui)?;
-        Ok(env)
+        })
     }
 
     pub(crate) fn path_converter(&self) -> &RepoPathUiConverter {
@@ -851,7 +845,7 @@ impl WorkspaceCommandEnvironment {
         &self.workspace_name
     }
 
-    pub(crate) fn revset_parse_context(&self) -> RevsetParseContext<'_> {
+    pub(crate) fn revset_parse_context_for(&self, repo: &dyn Repo) -> RevsetParseContext<'_> {
         let workspace_context = RevsetWorkspaceContext {
             path_converter: &self.path_converter,
             workspace_name: &self.workspace_name,
@@ -873,61 +867,30 @@ impl WorkspaceCommandEnvironment {
             extensions: self.command.revset_extensions(),
             workspace: Some(workspace_context),
             // TODO: Consider handling errors here.
-            mailmap: Arc::new(self.current_mailmap().unwrap_or_default()),
+            mailmap: Arc::new(self.mailmap_for(repo).unwrap_or_default()),
         }
     }
 
-    /// Creates fresh new context which manages cache of short commit/change ID
-    /// prefixes. New context should be created per repo view (or operation.)
-    pub fn new_id_prefix_context(&self) -> IdPrefixContext {
+    fn mailmap_for(&self, repo: &dyn Repo) -> Result<Mailmap, CommandError> {
+        // TODO: Consider figuring out a caching strategy for this.
+        Ok(read_current_mailmap(repo, self.workspace_name()).block_on()?)
+    }
+
+    pub fn new_id_prefix_context(
+        &self,
+        short_prefixes_expression: Option<&Arc<UserRevsetExpression>>,
+    ) -> IdPrefixContext {
         let context = IdPrefixContext::new(self.command.revset_extensions().clone());
-        match &self.short_prefixes_expression {
+        match short_prefixes_expression {
             None => context,
             Some(expression) => context.disambiguate_within(expression.clone()),
         }
     }
 
-    /// Updates parsed revset expressions.
-    fn reload_revset_expressions(&mut self, ui: &Ui) -> Result<(), CommandError> {
-        self.immutable_heads_expression = self.load_immutable_heads_expression(ui)?;
-        self.short_prefixes_expression = self.load_short_prefixes_expression(ui)?;
-        Ok(())
-    }
-
-    /// User-configured expression defining the immutable set.
-    pub fn immutable_expression(&self) -> Arc<UserRevsetExpression> {
-        // Negated ancestors expression `~::(<heads> | root())` is slightly
-        // easier to optimize than negated union `~(::<heads> | root())`.
-        self.immutable_heads_expression.ancestors()
-    }
-
-    /// User-configured expression defining the heads of the immutable set.
-    pub fn immutable_heads_expression(&self) -> &Arc<UserRevsetExpression> {
-        &self.immutable_heads_expression
-    }
-
-    /// User-configured conflict marker style for materializing conflicts
-    pub fn conflict_marker_style(&self) -> ConflictMarkerStyle {
-        self.conflict_marker_style
-    }
-
-    fn load_immutable_heads_expression(
+    pub(crate) fn short_prefixes_expression_for(
         &self,
         ui: &Ui,
-    ) -> Result<Arc<UserRevsetExpression>, CommandError> {
-        let mut diagnostics = RevsetDiagnostics::new();
-        let expression = revset_util::parse_immutable_heads_expression(
-            &mut diagnostics,
-            &self.revset_parse_context(),
-        )
-        .map_err(|e| config_error_with_message("Invalid `revset-aliases.immutable_heads()`", e))?;
-        print_parse_diagnostics(ui, "In `revset-aliases.immutable_heads()`", &diagnostics)?;
-        Ok(expression)
-    }
-
-    fn load_short_prefixes_expression(
-        &self,
-        ui: &Ui,
+        repo: &dyn Repo,
     ) -> Result<Option<Arc<UserRevsetExpression>>, CommandError> {
         let revset_string = self
             .settings
@@ -941,7 +904,7 @@ impl WorkspaceCommandEnvironment {
             let (expression, modifier) = revset::parse_with_modifier(
                 &mut diagnostics,
                 &revset_string,
-                &self.revset_parse_context(),
+                &self.revset_parse_context_for(repo),
             )
             .map_err(|err| config_error_with_message("Invalid `revsets.short-prefixes`", err))?;
             print_parse_diagnostics(ui, "In `revsets.short-prefixes`", &diagnostics)?;
@@ -950,36 +913,42 @@ impl WorkspaceCommandEnvironment {
         }
     }
 
-    /// Returns first immutable commit.
-    fn find_immutable_commit(
+    pub(crate) fn immutable_heads_expression_for(
         &self,
+        ui: &Ui,
         repo: &dyn Repo,
-        to_rewrite_expr: &Arc<ResolvedRevsetExpression>,
-    ) -> Result<Option<CommitId>, CommandError> {
-        let immutable_expression = if self.command.global_args().ignore_immutable {
-            UserRevsetExpression::root()
-        } else {
-            self.immutable_expression()
-        };
-
-        // Not using self.id_prefix_context() because the disambiguation data
-        // must not be calculated and cached against arbitrary repo. It's also
-        // unlikely that the immutable expression contains short hashes.
-        let id_prefix_context = IdPrefixContext::new(self.command.revset_extensions().clone());
-        let immutable_expr = RevsetExpressionEvaluator::new(
-            repo,
-            self.command.revset_extensions().clone(),
-            &id_prefix_context,
-            immutable_expression,
+    ) -> Result<Arc<UserRevsetExpression>, CommandError> {
+        let mut diagnostics = RevsetDiagnostics::new();
+        let expression = revset_util::parse_immutable_heads_expression(
+            &mut diagnostics,
+            &self.revset_parse_context_for(repo),
         )
-        .resolve()
         .map_err(|e| config_error_with_message("Invalid `revset-aliases.immutable_heads()`", e))?;
+        print_parse_diagnostics(ui, "In `revset-aliases.immutable_heads()`", &diagnostics)?;
+        Ok(expression)
+    }
 
-        let mut commit_id_iter = immutable_expr
-            .intersection(to_rewrite_expr)
-            .evaluate(repo)?
-            .iter();
-        Ok(commit_id_iter.next().transpose()?)
+    pub(crate) fn commit_template_language<'a>(
+        &'a self,
+        repo: &'a dyn Repo,
+        id_prefix_context: &'a IdPrefixContext,
+        immutable_expression: Arc<UserRevsetExpression>,
+    ) -> CommitTemplateLanguage<'a> {
+        CommitTemplateLanguage::new(
+            repo,
+            &self.path_converter(),
+            &self.workspace_name(),
+            self.revset_parse_context_for(repo),
+            id_prefix_context,
+            immutable_expression,
+            self.conflict_marker_style,
+            &self.command.data.commit_template_extensions,
+        )
+    }
+
+    /// User-configured conflict marker style for materializing conflicts
+    pub fn conflict_marker_style(&self) -> ConflictMarkerStyle {
+        self.conflict_marker_style
     }
 
     pub fn template_aliases_map(&self) -> &TemplateAliasesMap {
@@ -1009,25 +978,6 @@ impl WorkspaceCommandEnvironment {
         Ok(template)
     }
 
-    /// Creates commit template language environment for this workspace and the
-    /// given `repo`.
-    pub fn commit_template_language<'a>(
-        &'a self,
-        repo: &'a dyn Repo,
-        id_prefix_context: &'a IdPrefixContext,
-    ) -> CommitTemplateLanguage<'a> {
-        CommitTemplateLanguage::new(
-            repo,
-            &self.path_converter,
-            &self.workspace_name,
-            self.revset_parse_context(),
-            id_prefix_context,
-            self.immutable_expression(),
-            self.conflict_marker_style,
-            &self.command.data.commit_template_extensions,
-        )
-    }
-
     pub fn operation_template_extensions(&self) -> &[Arc<dyn OperationTemplateLanguageExtension>] {
         &self.command.data.operation_template_extensions
     }
@@ -1051,6 +1001,8 @@ pub struct WorkspaceCommandHelper {
     op_summary_template_text: String,
     may_update_working_copy: bool,
     working_copy_shared_with_git: bool,
+    immutable_heads_expression: Arc<UserRevsetExpression>,
+    short_prefixes_expression: Option<Arc<UserRevsetExpression>>,
 }
 
 enum SnapshotWorkingCopyError {
@@ -1091,7 +1043,7 @@ impl WorkspaceCommandHelper {
         let working_copy_shared_with_git =
             crate::git_util::is_colocated_git_workspace(&workspace, &repo);
 
-        let helper = Self {
+        let mut helper = Self {
             workspace,
             user_repo: ReadonlyUserRepo::new(repo),
             env,
@@ -1099,7 +1051,10 @@ impl WorkspaceCommandHelper {
             op_summary_template_text,
             may_update_working_copy,
             working_copy_shared_with_git,
+            immutable_heads_expression: RevsetExpression::root(),
+            short_prefixes_expression: None,
         };
+        helper.reload_revset_expressions(ui)?;
         // Parse commit_summary template early to report error before starting
         // mutable operation.
         helper.parse_operation_template(ui, &helper.op_summary_template_text)?;
@@ -1127,6 +1082,81 @@ impl WorkspaceCommandHelper {
                 hint,
             ))
         }
+    }
+
+    /// User-configured expression defining the immutable set.
+    pub fn immutable_expression(&self) -> Arc<UserRevsetExpression> {
+        // Negated ancestors expression `~::(<heads> | root())` is slightly
+        // easier to optimize than negated union `~(::<heads> | root())`.
+        self.immutable_heads_expression.ancestors()
+    }
+
+    /// User-configured expression defining the heads of the immutable set.
+    pub fn immutable_heads_expression(&self) -> &Arc<UserRevsetExpression> {
+        &self.immutable_heads_expression
+    }
+
+    /// Updates parsed revset expressions.
+    fn reload_revset_expressions(&mut self, ui: &Ui) -> Result<(), CommandError> {
+        self.immutable_heads_expression = self.load_immutable_heads_expression(ui)?;
+        self.short_prefixes_expression = self.load_short_prefixes_expression(ui)?;
+        Ok(())
+    }
+
+    fn load_immutable_heads_expression(
+        &self,
+        ui: &Ui,
+    ) -> Result<Arc<UserRevsetExpression>, CommandError> {
+        self.env()
+            .immutable_heads_expression_for(ui, self.repo().as_ref())
+    }
+
+    /// Returns first immutable commit.
+    fn find_immutable_commit(
+        &self,
+        repo: &dyn Repo,
+        to_rewrite_expr: &Arc<ResolvedRevsetExpression>,
+    ) -> Result<Option<CommitId>, CommandError> {
+        let immutable_expression = if self.env().command.global_args().ignore_immutable {
+            UserRevsetExpression::root()
+        } else {
+            self.immutable_expression()
+        };
+
+        // Not using self.id_prefix_context() because the disambiguation data
+        // must not be calculated and cached against arbitrary repo. It's also
+        // unlikely that the immutable expression contains short hashes.
+        let id_prefix_context =
+            IdPrefixContext::new(self.env().command.revset_extensions().clone());
+        let immutable_expr = RevsetExpressionEvaluator::new(
+            repo,
+            self.env().command.revset_extensions().clone(),
+            &id_prefix_context,
+            immutable_expression,
+        )
+        .resolve()
+        .map_err(|e| config_error_with_message("Invalid `revset-aliases.immutable_heads()`", e))?;
+
+        let mut commit_id_iter = immutable_expr
+            .intersection(to_rewrite_expr)
+            .evaluate(repo)?
+            .iter();
+        Ok(commit_id_iter.next().transpose()?)
+    }
+
+    fn load_short_prefixes_expression(
+        &self,
+        ui: &Ui,
+    ) -> Result<Option<Arc<UserRevsetExpression>>, CommandError> {
+        self.env()
+            .short_prefixes_expression_for(ui, self.repo().as_ref())
+    }
+
+    /// Creates fresh new context which manages cache of short commit/change ID
+    /// prefixes. New context should be created per repo view (or operation.)
+    pub fn new_id_prefix_context(&self) -> IdPrefixContext {
+        self.env()
+            .new_id_prefix_context(self.short_prefixes_expression.as_ref())
     }
 
     /// Acquires a lock for git import/export operations if the workspace is
@@ -1403,11 +1433,7 @@ to the current parents may contain changes from multiple commits.
     }
 
     pub fn current_mailmap(&self) -> Result<Mailmap, CommandError> {
-        // TODO: Consider figuring out a caching strategy for this.
-        Ok(
-            read_current_mailmap(self.repo().as_ref(), self.workspace.workspace_name())
-                .block_on()?,
-        )
+        self.env().mailmap_for(self.repo().as_ref())
     }
 
     pub fn working_copy_shared_with_git(&self) -> bool {
@@ -1488,6 +1514,10 @@ to the current parents may contain changes from multiple commits.
             force_tracking_matcher: &NothingMatcher,
             max_new_file_size,
         })
+    }
+
+    pub(crate) fn revset_parse_context(&self) -> RevsetParseContext<'_> {
+        self.env().revset_parse_context_for(self.repo().as_ref())
     }
 
     pub(crate) fn path_converter(&self) -> &RepoPathUiConverter {
@@ -1732,7 +1762,7 @@ to the current parents may contain changes from multiple commits.
         revision_arg: &RevisionArg,
     ) -> Result<(RevsetExpressionEvaluator<'_>, Option<RevsetModifier>), CommandError> {
         let mut diagnostics = RevsetDiagnostics::new();
-        let context = self.env.revset_parse_context();
+        let context = self.revset_parse_context();
         let (expression, modifier) =
             revset::parse_with_modifier(&mut diagnostics, revision_arg.as_ref(), &context)?;
         print_parse_diagnostics(ui, "In revset expression", &diagnostics)?;
@@ -1746,7 +1776,7 @@ to the current parents may contain changes from multiple commits.
         revision_args: &[RevisionArg],
     ) -> Result<RevsetExpressionEvaluator<'_>, CommandError> {
         let mut diagnostics = RevsetDiagnostics::new();
-        let context = self.env.revset_parse_context();
+        let context = self.revset_parse_context();
         let expressions: Vec<_> = revision_args
             .iter()
             .map(|arg| revset::parse_with_modifier(&mut diagnostics, arg.as_ref(), &context))
@@ -1772,7 +1802,7 @@ to the current parents may contain changes from multiple commits.
     pub fn id_prefix_context(&self) -> &IdPrefixContext {
         self.user_repo
             .id_prefix_context
-            .get_or_init(|| self.env.new_id_prefix_context())
+            .get_or_init(|| self.new_id_prefix_context())
     }
 
     /// Parses template of the given language into evaluation tree.
@@ -1832,8 +1862,18 @@ to the current parents may contain changes from multiple commits.
 
     /// Creates commit template language environment for this workspace.
     pub fn commit_template_language(&self) -> CommitTemplateLanguage<'_> {
-        self.env
-            .commit_template_language(self.repo().as_ref(), self.id_prefix_context())
+        self.commit_template_language_for(self.repo().as_ref(), self.id_prefix_context())
+    }
+
+    /// Creates commit template language environment for this workspace and the
+    /// given `repo`.
+    pub fn commit_template_language_for<'a>(
+        &'a self,
+        repo: &'a dyn Repo,
+        id_prefix_context: &'a IdPrefixContext,
+    ) -> CommitTemplateLanguage<'a> {
+        self.env()
+            .commit_template_language(repo, id_prefix_context, self.immutable_expression())
     }
 
     /// Creates operation template language environment for this workspace.
@@ -1900,7 +1940,7 @@ to the current parents may contain changes from multiple commits.
         to_rewrite_expr: &Arc<ResolvedRevsetExpression>,
     ) -> Result<(), CommandError> {
         let repo = self.repo().as_ref();
-        let Some(commit_id) = self.env.find_immutable_commit(repo, to_rewrite_expr)? else {
+        let Some(commit_id) = self.find_immutable_commit(repo, to_rewrite_expr)? else {
             return Ok(());
         };
         let error = if &commit_id == repo.store().root_commit_id() {
@@ -1927,7 +1967,7 @@ to the current parents may contain changes from multiple commits.
                 repo,
                 self.env.command.revset_extensions().clone(),
                 &id_prefix_context,
-                self.env.immutable_expression(),
+                self.immutable_expression(),
             )
             .resolve()?
             .intersection(&to_rewrite_expr.descendants())
@@ -2108,7 +2148,7 @@ to the current parents may contain changes from multiple commits.
             // the unresolvable trunk() issue gets addressed differently, it
             // should be okay to propagate the error.
             let wc_expr = RevsetExpression::commit(wc_commit_id.clone());
-            let is_immutable = match self.env.find_immutable_commit(tx.repo(), &wc_expr) {
+            let is_immutable = match self.find_immutable_commit(tx.repo(), &wc_expr) {
                 Ok(commit_id) => commit_id.is_some(),
                 Err(CommandError { error, .. }) => {
                     writeln!(
@@ -2131,9 +2171,10 @@ to the current parents may contain changes from multiple commits.
                 )?;
             }
         }
-        if let Err(err) =
-            revset_util::try_resolve_trunk_alias(tx.repo(), &self.env.revset_parse_context())
-        {
+        if let Err(err) = revset_util::try_resolve_trunk_alias(
+            tx.repo(),
+            &self.env.revset_parse_context_for(tx.repo()),
+        ) {
             // The warning would be printed above if working copies exist.
             if tx.repo().view().wc_commit_ids().is_empty() {
                 writeln!(
@@ -2541,10 +2582,9 @@ impl WorkspaceCommandTransaction<'_> {
     pub fn commit_template_language(&self) -> CommitTemplateLanguage<'_> {
         let id_prefix_context = self
             .id_prefix_context
-            .get_or_init(|| self.helper.env.new_id_prefix_context());
+            .get_or_init(|| self.helper.new_id_prefix_context());
         self.helper
-            .env
-            .commit_template_language(self.tx.repo(), id_prefix_context)
+            .commit_template_language_for(self.tx.repo(), id_prefix_context)
     }
 
     /// Parses commit template with the current transaction state.

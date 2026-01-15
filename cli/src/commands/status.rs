@@ -161,7 +161,7 @@ pub(crate) fn cmd_status(
                         .parents()
                         .ancestors()
                         .filtered(RevsetFilterPredicate::HasConflict)
-                        .minus(&workspace_command.env().immutable_expression()),
+                        .minus(&workspace_command.immutable_expression()),
                 )
                 .evaluate_to_commit_ids()?
                 .try_collect()?;

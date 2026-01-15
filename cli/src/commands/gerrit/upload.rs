@@ -189,7 +189,6 @@ pub fn cmd_gerrit_upload(
     let to_upload: Vec<Commit> = workspace_command
         .attach_revset_evaluator(
             workspace_command
-                .env()
                 .immutable_expression()
                 .range(&RevsetExpression::commits(revisions.clone())),
         )

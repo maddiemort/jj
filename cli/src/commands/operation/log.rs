@@ -162,10 +162,20 @@ fn do_op_log(
             let parent_repo = repo_loader.load_at(&merged_parent_op)?;
             let repo = repo_loader.load_at(op)?;
 
-            let id_prefix_context = workspace_env.new_id_prefix_context();
+            let short_prefixes_expression =
+                workspace_env.short_prefixes_expression_for(ui, repo.as_ref())?;
+            let id_prefix_context =
+                workspace_env.new_id_prefix_context(short_prefixes_expression.as_ref());
             let commit_summary_template = {
-                let language =
-                    workspace_env.commit_template_language(repo.as_ref(), &id_prefix_context);
+                let immutable_heads_expression =
+                    workspace_env.immutable_heads_expression_for(ui, repo.as_ref())?;
+                let immutable_expression = immutable_heads_expression.ancestors();
+
+                let language = workspace_env.commit_template_language(
+                    repo.as_ref(),
+                    &id_prefix_context,
+                    immutable_expression,
+                );
                 workspace_env
                     .parse_template(ui, &language, &template_text)?
                     .labeled(["op_log", "commit"])

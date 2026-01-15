@@ -124,9 +124,10 @@ pub fn cmd_op_diff(
         (!formats.is_empty())
             .then(|| DiffRenderer::new(merged_repo, path_converter, conflict_marker_style, formats))
     };
-    let id_prefix_context = workspace_env.new_id_prefix_context();
+    let id_prefix_context = workspace_command.new_id_prefix_context();
     let commit_summary_template = {
-        let language = workspace_env.commit_template_language(merged_repo, &id_prefix_context);
+        let language =
+            workspace_command.commit_template_language_for(merged_repo, &id_prefix_context);
         let text = settings.get_string("templates.commit_summary")?;
         workspace_env
             .parse_template(ui, &language, &text)?
